@@ -146,12 +146,15 @@ jobs:
 
       - name: Tag commit with all package names and versions
         shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           $ErrorActionPreference = 'Stop'
           $tags = @("${{ steps.meta.outputs.tags }}" -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
 
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
+          git remote set-url origin "https://x-access-token:$env:GH_TOKEN@github.com/${{ github.repository }}.git"
 
           foreach ($tag in $tags) {
             $exists = git tag -l "$tag"
