@@ -51,13 +51,14 @@ jobs:
         run: |
           $ErrorActionPreference = 'Stop'
 
+          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
           $exe = Get-ChildItem -Path . -Recurse -File |
-            Where-Object { $_.Name -eq 'dotnet-version.exe' } |
+            Where-Object { $_.Name -eq $exeName } |
             Sort-Object FullName |
             Select-Object -First 1
 
           if (-not $exe) {
-            throw "Could not find dotnet-version.exe after build."
+            throw "Could not find $exeName after build."
           }
 
           Write-Host "Using executable: $($exe.FullName)"
