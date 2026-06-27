@@ -52,12 +52,12 @@ jobs:
           $ErrorActionPreference = 'Stop'
 
           $exe = Get-ChildItem -Path . -Recurse -File |
-            Where-Object { $_.Name -eq 'DotnetVersionReader.exe' } |
+            Where-Object { $_.Name -eq 'dotnet-version.exe' } |
             Sort-Object FullName |
             Select-Object -First 1
 
           if (-not $exe) {
-            throw "Could not find DotnetVersionReader.exe after build."
+            throw "Could not find dotnet-version.exe after build."
           }
 
           Write-Host "Using executable: $($exe.FullName)"
