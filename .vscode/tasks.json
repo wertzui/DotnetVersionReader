@@ -1,0 +1,10 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "1-uninstall-old-tool",
+			"type": "shell",
+			"command": "dotnet tool uninstall -g DotnetVersion; dotnet tool uninstall -g DotnetVersionReader; dotnet tool uninstall -g dotnet-version; Write-Host 'Uninstall step done'"
+		}
+	]
+}

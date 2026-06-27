@@ -1,0 +1,198 @@
+name: Build, Test, Pack, Publish
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      slnx_file:
+        description: "Path to the .slnx file"
+        required: false
+        default: "DotnetVersionReader.slnx"
+
+permissions:
+  contents: write
+
+jobs:
+  build-test-pack-publish:
+    runs-on: ubuntu-latest
+    env:
+      SLNX_FILE: ${{ inputs.slnx_file || 'DotnetVersionReader.slnx' }}
+    permissions:
+      id-token: write  # enable GitHub OIDC token issuance for this job
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore "$env:SLNX_FILE"
+
+      - name: Build (GeneratePackageOnBuild)
+        shell: pwsh
+        run: dotnet build "$env:SLNX_FILE" -c Release --no-restore
+
+      - name: Test
+        shell: pwsh
+        run: dotnet test "$env:SLNX_FILE" -c Release --no-build
+
+      - name: Collect package metadata from built executable and packages
+        id: meta
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exe = Get-ChildItem -Path . -Recurse -File |
+            Where-Object { $_.Name -eq 'DotnetVersionReader.exe' } |
+            Sort-Object FullName |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            throw "Could not find DotnetVersionReader.exe after build."
+          }
+
+          Write-Host "Using executable: $($exe.FullName)"
+
+          $exeOutput = & $exe.FullName "$env:SLNX_FILE" -f "GeneratePackageOnBuild=true" 2>&1
+          $exeLines = @($exeOutput | ForEach-Object { "$_" })
+
+          if ($exeLines.Count -gt 0) {
+            Write-Host "Executable output:"
+            $exeLines | ForEach-Object { Write-Host $_ }
+          }
+
+          $pairs = @()
+          foreach ($line in $exeLines) {
+            if ($line -match '(?<name>[A-Za-z0-9_.-]+)\s*[:=]\s*v?(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)') {
+              $pairs += [PSCustomObject]@{ Name = $Matches.name; Version = $Matches.version }
+              continue
+            }
+
+            if ($line -match '(?<name>[A-Za-z0-9_.-]+)\s+v?(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)') {
+              $pairs += [PSCustomObject]@{ Name = $Matches.name; Version = $Matches.version }
+            }
+          }
+
+          $packages = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
+            Where-Object { $_.Name -notlike '*.symbols.nupkg' }
+
+          if (-not $packages) {
+            throw "No .nupkg files were produced."
+          }
+
+          $packagePairs = foreach ($pkg in $packages) {
+            if ($pkg.BaseName -match '^(?<name>.+)\.(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)$') {
+              [PSCustomObject]@{ Name = $Matches.name; Version = $Matches.version }
+            }
+          }
+
+          $pairs = @($pairs + $packagePairs) |
+            Group-Object Name, Version |
+            ForEach-Object { $_.Group[0] }
+
+          if (-not $pairs) {
+            throw "Could not determine package names/versions from executable output or package filenames."
+          }
+
+          $tagList = New-Object System.Collections.Generic.List[string]
+          foreach ($p in $pairs) {
+            $rawTag = "$($p.Name)-v$($p.Version)"
+            $safeTag = ($rawTag -replace '[^0-9A-Za-z._/-]', '-')
+            if (-not $tagList.Contains($safeTag)) {
+              $tagList.Add($safeTag)
+            }
+          }
+
+          $summaryParts = @($pairs | ForEach-Object { "$($_.Name) $($_.Version)" })
+          $releaseName = "Release: " + ($summaryParts -join ', ')
+
+          $releaseTagRaw = "release-" + (($pairs | ForEach-Object { "$($_.Name)-v$($_.Version)" }) -join '__')
+          $releaseTag = ($releaseTagRaw -replace '[^0-9A-Za-z._/-]', '-')
+          if ($releaseTag.Length -gt 200) {
+            $releaseTag = "release-${{ github.run_number }}-${{ github.sha }}"
+          }
+
+          $pkgFiles = @($packages | ForEach-Object { $_.FullName })
+
+          $tagsJoined = $tagList -join "`n"
+          $pkgFilesJoined = $pkgFiles -join "`n"
+          $body = @("Packages in this release:") + ($pairs | ForEach-Object { "- $($_.Name) $($_.Version)" })
+          $bodyJoined = $body -join "`n"
+
+          "tags<<EOF" >> $env:GITHUB_OUTPUT
+          $tagsJoined >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
+          "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
+          "release_name=$releaseName" >> $env:GITHUB_OUTPUT
+
+          "release_body<<EOF" >> $env:GITHUB_OUTPUT
+          $bodyJoined >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
+          "package_files<<EOF" >> $env:GITHUB_OUTPUT
+          $pkgFilesJoined >> $env:GITHUB_OUTPUT
+          "EOF" >> $env:GITHUB_OUTPUT
+
+      - name: Tag commit with all package names and versions
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $tags = @("${{ steps.meta.outputs.tags }}" -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          foreach ($tag in $tags) {
+            $exists = git tag -l "$tag"
+            if ($exists) {
+              Write-Host "Tag already exists: $tag"
+              continue
+            }
+
+            git tag -a "$tag" -m "Release $tag"
+            git push origin "$tag"
+          }
+
+          $releaseTag = "${{ steps.meta.outputs.release_tag }}"
+          $releaseExists = git tag -l "$releaseTag"
+          if (-not $releaseExists) {
+            git tag -a "$releaseTag" -m "${{ steps.meta.outputs.release_name }}"
+            git push origin "$releaseTag"
+          }
+
+      # Get a short-lived NuGet API key
+      - name: NuGet login (OIDC → temp API key)
+        uses: NuGet/login@v1
+        id: login
+        with:
+          user: ${{ secrets.NUGET_USER }}
+    
+      # Push the package
+      - name: NuGet push
+        run: dotnet nuget push artifacts/my-sdk.nupkg --api-key ${{steps.login.outputs.NUGET_API_KEY}} --source https://api.nuget.org/v3/index.json
+
+      - name: Publish packages to NuGet
+        shell: pwsh
+        run: |
+          $pkgs = @("${{ steps.meta.outputs.package_files }}" -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          foreach ($pkg in $pkgs) {
+            dotnet nuget push "$pkg" --api-key "${{steps.login.outputs.NUGET_API_KEY}}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+          }
+
+      - name: Create GitHub release and upload nupkg files
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.release_tag }}
+          name: ${{ steps.meta.outputs.release_name }}
+          body: ${{ steps.meta.outputs.release_body }}
+          files: ${{ steps.meta.outputs.package_files }}

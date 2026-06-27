@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="src\DotnetVersionReader\DotnetVersionReader.csproj" />
+  <Project Path="tests\DotnetVersionReader.Tests\DotnetVersionReader.Tests.csproj" />
+</Solution>
