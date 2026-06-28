@@ -185,7 +185,7 @@ jobs:
       - name: Publish packages to NuGet
         shell: pwsh
         env:
-          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
+          NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}
         run: |
           $ErrorActionPreference = 'Stop'
           $pkgs = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
