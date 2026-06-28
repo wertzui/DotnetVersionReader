@@ -188,10 +188,20 @@ jobs:
 
       - name: Publish packages to NuGet
         shell: pwsh
+        env:
+          NUGET_API_KEY: ${{ secrets.NUGET_API_KEY }}
         run: |
-          $pkgs = @("${{ steps.meta.outputs.package_files }}" -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
+          $ErrorActionPreference = 'Stop'
+          $pkgs = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
+            Where-Object { $_.Name -notlike '*.symbols.nupkg' }
+
+          if (-not $pkgs) {
+            throw "No .nupkg files found to publish."
+          }
+
           foreach ($pkg in $pkgs) {
-            dotnet nuget push "$pkg" --api-key "${{steps.login.outputs.NUGET_API_KEY}}" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+            Write-Host "Pushing $($pkg.FullName)"
+            dotnet nuget push "$($pkg.FullName)" --api-key "$env:NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
           }
 
       - name: Create GitHub release and upload nupkg files
