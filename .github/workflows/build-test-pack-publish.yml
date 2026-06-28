@@ -47,6 +47,58 @@ jobs:
         shell: pwsh
         run: dotnet test "$env:SLNX_FILE" -c Release --no-build
 
+      - name: Check version bumps against previous release tag
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
+          $exe = Get-ChildItem -Path . -Recurse -File |
+            Where-Object { $_.Name -eq $exeName } |
+            Sort-Object FullName |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            throw "Could not find $exeName after build."
+          }
+
+          Write-Host "Using executable: $($exe.FullName)"
+
+          # Find the most recent release tag to use as the base for the diff.
+          # Falls back to the first commit if no release tag exists yet.
+          $baseRef = git tag --sort=-creatordate |
+            Where-Object { $_ -match '^release-' } |
+            Select-Object -First 1
+
+          if (-not $baseRef) {
+            Write-Host "No previous release tag found; skipping version-bump check."
+            exit 0
+          }
+
+          Write-Host "Comparing against base ref: $baseRef"
+
+          $checkOutput = & $exe.FullName check `
+            --input "$env:SLNX_FILE" `
+            --base "$baseRef" `
+            --filter "GeneratePackageOnBuild=true" `
+            --output table 2>&1
+          $checkExitCode = $LASTEXITCODE
+
+          # Print to build log
+          $checkOutput | ForEach-Object { Write-Host $_ }
+
+          # Write to the job summary so the table is visible in the Actions UI
+          $summaryTitle = if ($checkExitCode -ne 0) { '## ❌ Version bump required before publish' } else { '## ✅ Version bump check passed' }
+          $summaryTitle     >> $env:GITHUB_STEP_SUMMARY
+          ''                >> $env:GITHUB_STEP_SUMMARY
+          $checkOutput | ForEach-Object { $_ >> $env:GITHUB_STEP_SUMMARY }
+
+          if ($checkExitCode -ne 0) {
+            Write-Host ""
+            Write-Host "::error::One or more NuGet packages require a version bump before publishing."
+            exit 1
+          }
+
       - name: Collect package metadata from built executable and packages
         id: meta
         shell: pwsh

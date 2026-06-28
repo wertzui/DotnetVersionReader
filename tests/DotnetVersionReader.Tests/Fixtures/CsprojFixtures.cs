@@ -93,5 +93,30 @@ public static class CsprojFixtures
           </PropertyGroup>
         </Project>
         """;
+
+    // -------------------------------------------------------------------------
+    // Fixtures for dependency-graph / check tests
+    // -------------------------------------------------------------------------
+
+    /// <summary>Creates a .csproj that has a single &lt;ProjectReference&gt; to <paramref name="refPath"/>.</summary>
+    public static string WithProjectReference(string refPath, string version = "1.0.0") => $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <Version>{version}</Version>
+          </PropertyGroup>
+          <ItemGroup>
+            <ProjectReference Include="{refPath.Replace('\\', '/')}" />
+          </ItemGroup>
+        </Project>
+        """;
+
+    /// <summary>A simple library project with a configurable version.</summary>
+    public static string Library(string version = "1.0.0") => $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <Version>{version}</Version>
+          </PropertyGroup>
+        </Project>
+        """;
 }
 

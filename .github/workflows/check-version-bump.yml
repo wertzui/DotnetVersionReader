@@ -1,0 +1,74 @@
+name: Check Version Bump
+
+on:
+  pull_request:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  check-version-bump:
+    runs-on: ubuntu-latest
+    env:
+      SLNX_FILE: DotnetVersionReader.slnx
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history required for git diff
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Restore
+        shell: pwsh
+        run: dotnet restore "$env:SLNX_FILE"
+
+      - name: Build
+        shell: pwsh
+        run: dotnet build "$env:SLNX_FILE" -c Release --no-restore
+
+      - name: Check version bumps
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+
+          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
+          $exe = Get-ChildItem -Path . -Recurse -File |
+            Where-Object { $_.Name -eq $exeName } |
+            Sort-Object FullName |
+            Select-Object -First 1
+
+          if (-not $exe) {
+            throw "Could not find $exeName after build."
+          }
+
+          Write-Host "Using executable: $($exe.FullName)"
+
+          # Check that every NuGet-publishable project that has changed has had
+          # its version bumped relative to origin/main (the default base).
+          $checkOutput = & $exe.FullName check `
+            --input "$env:SLNX_FILE" `
+            --filter "GeneratePackageOnBuild=true" `
+            --output table 2>&1
+          $checkExitCode = $LASTEXITCODE
+
+          # Print to build log
+          $checkOutput | ForEach-Object { Write-Host $_ }
+
+          # Write to the job summary so the table is visible in the Actions UI
+          $summaryTitle = if ($checkExitCode -ne 0) { '## ❌ Version bump required' } else { '## ✅ Version bump check passed' }
+          $summaryTitle     >> $env:GITHUB_STEP_SUMMARY
+          ''                >> $env:GITHUB_STEP_SUMMARY
+          $checkOutput | ForEach-Object { $_ >> $env:GITHUB_STEP_SUMMARY }
+
+          if ($checkExitCode -ne 0) {
+            Write-Host ""
+            Write-Host "::error::One or more projects require a version bump. Please update <Version> in the affected .csproj file(s)."
+            exit 1
+          }

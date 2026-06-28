@@ -5,8 +5,46 @@ namespace DotnetVersion.Tests.Helpers;
 /// </summary>
 public sealed class TempFileHelper : IDisposable
 {
-    private readonly List<string> _files = [];
+    private readonly List<string> _files       = [];
     private readonly List<string> _directories = [];
+
+    /// <summary>
+    /// Creates a temporary directory that has its own unique subdirectory per project,
+    /// so that each project's "owned files" are isolated (important for dependency-graph tests).
+    /// Returns the root directory and a mapping of project name → (csprojPath, projectDir).
+    /// </summary>
+    public (string RootDir, IReadOnlyDictionary<string, (string CsprojPath, string ProjectDir)> Projects)
+        CreateProjectTree(IEnumerable<(string Name, string Content)> projects)
+    {
+        var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(root);
+        _directories.Add(root);
+
+        var map = new Dictionary<string, (string, string)>(StringComparer.OrdinalIgnoreCase);
+        foreach (var (name, content) in projects)
+        {
+            var projectDir = Path.Combine(root, name);
+            Directory.CreateDirectory(projectDir);
+            var csprojPath = Path.Combine(projectDir, $"{name}.csproj");
+            File.WriteAllText(csprojPath, content);
+            map[name] = (csprojPath, projectDir);
+        }
+
+        return (root, map);
+    }
+
+    /// <summary>
+    /// Creates a plain file (not a .csproj) inside <paramref name="directory"/> with the given
+    /// relative <paramref name="relativePath"/> and <paramref name="content"/>.
+    /// </summary>
+    public string CreateFile(string directory, string relativePath, string content = "")
+    {
+        var fullPath = Path.Combine(directory, relativePath);
+        Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
+        File.WriteAllText(fullPath, content);
+        _files.Add(fullPath);
+        return fullPath;
+    }
 
     /// <summary>Writes <paramref name="content"/> to a temporary .csproj file and returns its path.</summary>
     public string CreateCsproj(string content, string? projectName = null)

@@ -83,6 +83,37 @@ public sealed class CsprojParser
         };
     }
 
+    /// <summary>
+    /// Parses .csproj XML from an in-memory <paramref name="content"/> string
+    /// (e.g. content retrieved via <c>git show</c>) and returns its version information.
+    /// The <paramref name="csprojPath"/> is used only to populate <see cref="ProjectVersionInfo.FilePath"/>
+    /// and <see cref="ProjectVersionInfo.Name"/>; the file does not need to exist on disk.
+    /// Returns <see langword="null"/> when the XML cannot be parsed.
+    /// </summary>
+    public ProjectVersionInfo? ParseFromString(string content, string csprojPath)
+    {
+        XDocument doc;
+        try
+        {
+            doc = XDocument.Parse(content);
+        }
+        catch
+        {
+            return null;
+        }
+
+        var name = Path.GetFileNameWithoutExtension(csprojPath);
+
+        return new ProjectVersionInfo
+        {
+            Name          = name,
+            FilePath      = csprojPath,
+            Version       = FindFirstElementValue(doc, "Version"),
+            VersionPrefix = FindFirstElementValue(doc, "VersionPrefix"),
+            VersionSuffix = FindFirstElementValue(doc, "VersionSuffix")
+        };
+    }
+
     // -------------------------------------------------------------------------
 
     private static string? FindFirstElementValue(XDocument doc, string localName)
