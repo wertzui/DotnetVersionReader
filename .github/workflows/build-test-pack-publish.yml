@@ -117,25 +117,15 @@ jobs:
 
           Write-Host "Using executable: $($exe.FullName)"
 
-          $exeOutput = & $exe.FullName "$env:SLNX_FILE" -f "GeneratePackageOnBuild=true" 2>&1
-          $exeLines = @($exeOutput | ForEach-Object { "$_" })
+          $exeOutput = & $exe.FullName read `
+            --input "$env:SLNX_FILE" `
+            --filter "GeneratePackageOnBuild=true" `
+            --output json 2>&1
+          Write-Host "Executable output:"
+          Write-Host $exeOutput
 
-          if ($exeLines.Count -gt 0) {
-            Write-Host "Executable output:"
-            $exeLines | ForEach-Object { Write-Host $_ }
-          }
-
-          $pairs = @()
-          foreach ($line in $exeLines) {
-            if ($line -match '(?<name>[A-Za-z0-9_.-]+)\s*[:=]\s*v?(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)') {
-              $pairs += [PSCustomObject]@{ Name = $Matches.name; Version = $Matches.version }
-              continue
-            }
-
-            if ($line -match '(?<name>[A-Za-z0-9_.-]+)\s+v?(?<version>\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?)') {
-              $pairs += [PSCustomObject]@{ Name = $Matches.name; Version = $Matches.version }
-            }
-          }
+          $pairs = $exeOutput | ConvertFrom-Json |
+            ForEach-Object { [PSCustomObject]@{ Name = $_.Name; Version = $_.Version } }
 
           $packages = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
             Where-Object { $_.Name -notlike '*.symbols.nupkg' }
