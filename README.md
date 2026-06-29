@@ -25,7 +25,7 @@ dotnet tool install --global DotnetVersionReader --version <version> --add-sourc
 
 ## Commands
 
-```
+```bash
 dotnet-version [command] [options]
 
 Commands:
@@ -40,7 +40,7 @@ Commands:
 Reads and displays version information. This is the **default command**: running
 `dotnet-version` with no subcommand is equivalent to `dotnet-version read`.
 
-```
+```bash
 # Both forms are equivalent:
 dotnet-version          [--input <path>] [options]
 dotnet-version read     [--input <path>] [options]
@@ -49,7 +49,9 @@ dotnet-version read     [--input <path>] [options]
 #### Options
 
 | Option | Short | Description |
-|--------|-------|-------------|| `--input` | `-i` | Path to a `.csproj`, `.sln`, `.slnx` file **or** a folder. Defaults to the current directory. || `--output` | `-o` | Output format: `json` (default), `table`, or `version` (single project only). |
+| -------- | ------- | ------------- |
+| `--input` | `-i` | Path to a `.csproj`, `.sln`, `.slnx` file **or** a folder. Defaults to the current directory. |
+| `--output` | `-o` | Output format: `json` (default), `table`, or `version` (single project only). |
 | `--filter` | `-f` | Filter in the form `XmlNode=Value`. Value can be a regex. Repeatable. |
 | `--schema` | | Print the JSON schema for `--output json` and exit. Defaults to `false`. |
 
@@ -103,7 +105,7 @@ dotnet-version read -i MySolution.slnx -f "TargetFramework=^net10\.0$" -f "Gener
 
 #### Sample table output
 
-```
+```text
 | Name      | Version    | Major | Minor | Patch | Suffix |
 |-----------|------------|-------|-------|-------|--------|
 | MyLibrary | 2.1.0-rc.1 | 2     | 1     | 0     | rc.1   |
@@ -117,7 +119,7 @@ dotnet-version read -i MySolution.slnx -f "TargetFramework=^net10\.0$" -f "Gener
 Checks that every project whose source files have changed (compared to a base branch)
 has had its version bumped. Designed to run as a CI gate on pull requests.
 
-```
+```bash
 dotnet-version check [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
 
 # Short aliases (--base defaults to origin/main):
@@ -127,7 +129,7 @@ dotnet-version check [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <Xm
 #### Options
 
 | Option | Short | Required | Description |
-|--------|-------|----------|-------------|
+| -------- | ------- | ---------- | ------------- |
 | `--input` | `-i` | | Path to a `.csproj`, `.sln`, `.slnx` file **or** a folder. Defaults to the current directory. |
 | `--base` | `-b` | | The git ref to compare against. Defaults to `origin/main`. |
 | `--head` | | | The git ref for the current state. Defaults to `HEAD`. |
@@ -137,7 +139,7 @@ dotnet-version check [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <Xm
 #### Exit codes
 
 | Code | Meaning |
-|------|---------|
+| ------ | --------- |
 | `0` | All affected projects have been version-bumped (or no relevant files changed). |
 | `1` | At least one affected project has **not** been bumped — the check failed. |
 | `2` | Usage or argument error (bad input path, git not found, etc.). |
@@ -196,7 +198,7 @@ dotnet-version check --input MySolution.slnx --base origin/main --filter "Genera
 Possible `Status` values:
 
 | Value | Meaning |
-|-------|---------|
+| ------- | --------- |
 | `Ok` | No relevant files changed, or the version was bumped. |
 | `BumpRequired` | Files changed but the version is the same as on the base branch. |
 | `NewProject` | The project did not exist on the base branch — no bump required. |
@@ -265,7 +267,7 @@ Runs on every pull request targeting `main`. Builds the tool from source and
 runs `dotnet-version check` to ensure every NuGet-publishable project that
 changed has had its version bumped.
 
-```
+```bash
 dotnet-version check --input DotnetVersionReader.slnx --filter "GeneratePackageOnBuild=true"
 ```
 
@@ -278,7 +280,7 @@ Runs automatically on every push to `main` and can also be triggered manually.
 ### What the publish workflow does
 
 | Step | Details |
-|------|---------|
+| ------ | --------- |
 | **Restore** | `dotnet restore` against the `.slnx` solution file |
 | **Build** | `dotnet build -c Release` (no restore) |
 | **Test** | `dotnet test -c Release --no-build` |
@@ -291,7 +293,7 @@ Runs automatically on every push to `main` and can also be triggered manually.
 ### Required repository secret
 
 | Secret | Description |
-|--------|-------------|
+| -------- | ------------- |
 | `NUGET_API_KEY` | API key from [nuget.org](https://www.nuget.org/account/apikeys) with push permission for the package(s) |
 
 Add it under **Settings → Secrets and variables → Actions → New repository secret**.
@@ -301,4 +303,3 @@ Add it under **Settings → Secrets and variables → Actions → New repository
 The workflow can be triggered manually from the **Actions** tab.  
 An optional `slnx_file` input lets you override the solution path
 (default: `DotnetVersionReader.slnx`).
-

@@ -2,106 +2,23 @@ name: Build, Test, Pack, Publish
 
 on:
   push:
-    branches:
-      - main
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
   workflow_dispatch:
     inputs:
       slnx_file:
-        description: "Path to the .slnx file"
+        description: "Path to the .slnx file (defaults to DotnetVersionReader.slnx)"
         required: false
-        default: "DotnetVersionReader.slnx"
 
 permissions:
   contents: write
+  id-token: write
 
 jobs:
   build-test-pack-publish:
-    runs-on: ubuntu-latest
-    env:
-      SLNX_FILE: ${{ inputs.slnx_file || 'DotnetVersionReader.slnx' }}
-    permissions:
-      contents: write
-      id-token: write
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Setup .NET
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: 10.0.x
-
-      - name: Restore
-        shell: pwsh
-        run: dotnet restore "$env:SLNX_FILE"
-
-      - name: Build (GeneratePackageOnBuild)
-        shell: pwsh
-        run: dotnet build "$env:SLNX_FILE" -c Release --no-restore
-
-      - name: Add built dotnet-version to PATH
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
-          $exe = Get-ChildItem -Path . -Recurse -File |
-            Where-Object { $_.Name -eq $exeName } |
-            Sort-Object FullName |
-            Select-Object -First 1
-          if (-not $exe) { throw "Could not find $exeName after build." }
-          Write-Host "Adding $($exe.DirectoryName) to PATH"
-          $exe.DirectoryName >> $env:GITHUB_PATH
-
-      - name: Test
-        shell: pwsh
-        run: dotnet test "$env:SLNX_FILE" -c Release --no-build
-
-      - name: Find base release tag
-        id: find-base
-        shell: pwsh
-        run: |
-          $baseRef = git tag --sort=-creatordate |
-            Where-Object { $_ -match '^release-' } |
-            Select-Object -First 1
-          if ($baseRef) {
-            "base_ref=$baseRef" >> $env:GITHUB_OUTPUT
-            "found=true"        >> $env:GITHUB_OUTPUT
-            Write-Host "Comparing against base ref: $baseRef"
-          } else {
-            Write-Host "No previous release tag found; skipping version-bump check."
-            "found=false" >> $env:GITHUB_OUTPUT
-          }
-
-      - name: Check version bumps against previous release tag
-        if: steps.find-base.outputs.found == 'true'
-        uses: ./.github/actions/check-dotnet-version
-        with:
-          input: ${{ env.SLNX_FILE }}
-          base: ${{ steps.find-base.outputs.base_ref }}
-          filter: GeneratePackageOnBuild=true
-
-      - name: Read version metadata
-        id: read-versions
-        uses: ./.github/actions/read-dotnet-version
-        with:
-          input: ${{ env.SLNX_FILE }}
-          filter: GeneratePackageOnBuild=true
-          create_tags: 'true'
-
-      - name: Publish packages to NuGet
-        id: publish
-        uses: ./.github/actions/publish-dotnet-packages
-        with:
-          nuget_user: ${{ secrets.NUGET_USER }}
-
-      - name: Create GitHub release and upload nupkg files
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.read-versions.outputs.release_tag }}
-          name: ${{ steps.read-versions.outputs.release_name }}
-          body: ${{ steps.read-versions.outputs.release_body }}
-          files: ${{ steps.publish.outputs.package_files }}
+    uses: wertzui/Actions/.github/workflows/nuget-build.yml@main
+    with:
+      solution_file: ${{ inputs.slnx_file || 'DotnetVersionReader.slnx' }}
+    secrets:
+      nuget_user: ${{ secrets.NUGET_USER }}
