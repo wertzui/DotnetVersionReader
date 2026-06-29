@@ -12,7 +12,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-version</ToolCommandName>
     <PackageId>DotnetVersionReader</PackageId>
-    <Version>1.1.2</Version>
+    <Version>1.1.3</Version>
     <InformationalVersion>$(Version)</InformationalVersion>
     <Authors>wertzui</Authors>
     <Description>A .NET global tool that reads and displays version information from .csproj files.</Description>
