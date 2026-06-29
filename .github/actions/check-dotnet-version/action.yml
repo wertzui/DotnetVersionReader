@@ -1,0 +1,55 @@
+name: 'Check .NET version bumps'
+description: 'Verifies that version numbers have been bumped in all packaged projects since a given base git ref. Fails the step and writes a summary if a bump is required.'
+
+inputs:
+  input:
+    description: 'Path to the .slnx or .csproj file.'
+    required: true
+  base:
+    description: 'Git ref (tag, branch, or SHA) to compare versions against.'
+    required: true
+  filter:
+    description: 'Property filter expression (e.g. "GeneratePackageOnBuild=true").'
+    required: false
+    default: ''
+  output:
+    description: 'Output format passed to dotnet-version: table, json, or csv.'
+    required: false
+    default: 'table'
+
+runs:
+  using: composite
+  steps:
+    - name: Check version bumps
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $extraArgs = @()
+        $filter = '${{ inputs.filter }}'
+        if ($filter) {
+          $extraArgs += '--filter', $filter
+        }
+
+        $checkOutput = dotnet-version check `
+          --input    '${{ inputs.input }}' `
+          --base     '${{ inputs.base }}' `
+          @extraArgs `
+          --output   '${{ inputs.output }}' 2>&1
+        $checkExitCode = $LASTEXITCODE
+
+        $checkOutput | ForEach-Object { Write-Host $_ }
+
+        $summaryTitle = if ($checkExitCode -ne 0) {
+          '## ❌ Version bump required before publish'
+        } else {
+          '## ✅ Version bump check passed'
+        }
+        $summaryTitle >> $env:GITHUB_STEP_SUMMARY
+        ''            >> $env:GITHUB_STEP_SUMMARY
+        $checkOutput | ForEach-Object { $_ >> $env:GITHUB_STEP_SUMMARY }
+
+        if ($checkExitCode -ne 0) {
+          Write-Host "::error::One or more NuGet packages require a version bump before publishing."
+          exit 1
+        }

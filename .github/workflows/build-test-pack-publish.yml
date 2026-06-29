@@ -43,199 +43,65 @@ jobs:
         shell: pwsh
         run: dotnet build "$env:SLNX_FILE" -c Release --no-restore
 
+      - name: Add built dotnet-version to PATH
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
+          $exe = Get-ChildItem -Path . -Recurse -File |
+            Where-Object { $_.Name -eq $exeName } |
+            Sort-Object FullName |
+            Select-Object -First 1
+          if (-not $exe) { throw "Could not find $exeName after build." }
+          Write-Host "Adding $($exe.DirectoryName) to PATH"
+          $exe.DirectoryName >> $env:GITHUB_PATH
+
       - name: Test
         shell: pwsh
         run: dotnet test "$env:SLNX_FILE" -c Release --no-build
 
-      - name: Check version bumps against previous release tag
+      - name: Find base release tag
+        id: find-base
         shell: pwsh
         run: |
-          $ErrorActionPreference = 'Stop'
-
-          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
-          $exe = Get-ChildItem -Path . -Recurse -File |
-            Where-Object { $_.Name -eq $exeName } |
-            Sort-Object FullName |
-            Select-Object -First 1
-
-          if (-not $exe) {
-            throw "Could not find $exeName after build."
-          }
-
-          Write-Host "Using executable: $($exe.FullName)"
-
-          # Find the most recent release tag to use as the base for the diff.
-          # Falls back to the first commit if no release tag exists yet.
           $baseRef = git tag --sort=-creatordate |
             Where-Object { $_ -match '^release-' } |
             Select-Object -First 1
-
-          if (-not $baseRef) {
+          if ($baseRef) {
+            "base_ref=$baseRef" >> $env:GITHUB_OUTPUT
+            "found=true"        >> $env:GITHUB_OUTPUT
+            Write-Host "Comparing against base ref: $baseRef"
+          } else {
             Write-Host "No previous release tag found; skipping version-bump check."
-            exit 0
+            "found=false" >> $env:GITHUB_OUTPUT
           }
 
-          Write-Host "Comparing against base ref: $baseRef"
-
-          $checkOutput = & $exe.FullName check `
-            --input "$env:SLNX_FILE" `
-            --base "$baseRef" `
-            --filter "GeneratePackageOnBuild=true" `
-            --output table 2>&1
-          $checkExitCode = $LASTEXITCODE
-
-          # Print to build log
-          $checkOutput | ForEach-Object { Write-Host $_ }
-
-          # Write to the job summary so the table is visible in the Actions UI
-          $summaryTitle = if ($checkExitCode -ne 0) { '## ❌ Version bump required before publish' } else { '## ✅ Version bump check passed' }
-          $summaryTitle     >> $env:GITHUB_STEP_SUMMARY
-          ''                >> $env:GITHUB_STEP_SUMMARY
-          $checkOutput | ForEach-Object { $_ >> $env:GITHUB_STEP_SUMMARY }
-
-          if ($checkExitCode -ne 0) {
-            Write-Host ""
-            Write-Host "::error::One or more NuGet packages require a version bump before publishing."
-            exit 1
-          }
-
-      - name: Collect package metadata from built executable and packages
-        id: meta
-        shell: pwsh
-        run: |
-          $ErrorActionPreference = 'Stop'
-
-          $exeName = if ($IsWindows) { 'dotnet-version.exe' } else { 'dotnet-version' }
-          $exe = Get-ChildItem -Path . -Recurse -File |
-            Where-Object { $_.Name -eq $exeName } |
-            Sort-Object FullName |
-            Select-Object -First 1
-
-          if (-not $exe) {
-            throw "Could not find $exeName after build."
-          }
-
-          Write-Host "Using executable: $($exe.FullName)"
-
-          $exeOutput = & $exe.FullName read `
-            --input "$env:SLNX_FILE" `
-            --filter "GeneratePackageOnBuild=true" `
-            --output json 2>&1
-          Write-Host "Executable output:"
-          Write-Host $exeOutput
-
-          $pairs = @($exeOutput | ConvertFrom-Json |
-            ForEach-Object { [PSCustomObject]@{ Name = $_.Name; Version = $_.Version } })
-
-          if (-not $pairs) {
-            throw "Could not determine package names/versions from executable output."
-          }
-
-          $packages = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
-            Where-Object { $_.Name -notlike '*.symbols.nupkg' }
-
-          if (-not $packages) {
-            throw "No .nupkg files were produced."
-          }
-
-          $tagList = New-Object System.Collections.Generic.List[string]
-          foreach ($p in $pairs) {
-            $rawTag = "$($p.Name)-v$($p.Version)"
-            $safeTag = ($rawTag -replace '[^0-9A-Za-z._/-]', '-')
-            if (-not $tagList.Contains($safeTag)) {
-              $tagList.Add($safeTag)
-            }
-          }
-
-          $summaryParts = @($pairs | ForEach-Object { "$($_.Name) $($_.Version)" })
-          $releaseName = "Release: " + ($summaryParts -join ', ')
-
-          $releaseTagRaw = "release-" + (($pairs | ForEach-Object { "$($_.Name)-v$($_.Version)" }) -join '__')
-          $releaseTag = ($releaseTagRaw -replace '[^0-9A-Za-z._/-]', '-')
-          if ($releaseTag.Length -gt 200) {
-            $releaseTag = "release-${{ github.run_number }}-${{ github.sha }}"
-          }
-
-          $pkgFiles = @($packages | ForEach-Object { $_.FullName })
-
-          $tagsJoined = $tagList -join "`n"
-          $pkgFilesJoined = $pkgFiles -join "`n"
-          $body = @("Packages in this release:") + ($pairs | ForEach-Object { "- $($_.Name) $($_.Version)" })
-          $bodyJoined = $body -join "`n"
-
-          "tags<<EOF" >> $env:GITHUB_OUTPUT
-          $tagsJoined >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
-
-          "release_tag=$releaseTag" >> $env:GITHUB_OUTPUT
-          "release_name=$releaseName" >> $env:GITHUB_OUTPUT
-
-          "release_body<<EOF" >> $env:GITHUB_OUTPUT
-          $bodyJoined >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
-
-          "package_files<<EOF" >> $env:GITHUB_OUTPUT
-          $pkgFilesJoined >> $env:GITHUB_OUTPUT
-          "EOF" >> $env:GITHUB_OUTPUT
-
-      - name: Tag commit with all package names and versions
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $tags = @("${{ steps.meta.outputs.tags }}" -split "`n" | Where-Object { -not [string]::IsNullOrWhiteSpace($_) })
-
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-
-          foreach ($tag in $tags) {
-            $exists = git tag -l "$tag"
-            if ($exists) {
-              Write-Host "Tag already exists: $tag"
-              continue
-            }
-
-            git tag -a "$tag" -m "Release $tag"
-            git push origin "$tag"
-          }
-
-          $releaseTag = "${{ steps.meta.outputs.release_tag }}"
-          $releaseExists = git tag -l "$releaseTag"
-          if (-not $releaseExists) {
-            git tag -a "$releaseTag" -m "${{ steps.meta.outputs.release_name }}"
-            git push origin "$releaseTag"
-          }
-
-      # Get a short-lived NuGet API key
-      - name: NuGet login (OIDC → temp API key)
-        uses: NuGet/login@v1
-        id: login
+      - name: Check version bumps against previous release tag
+        if: steps.find-base.outputs.found == 'true'
+        uses: ./.github/actions/check-dotnet-version
         with:
-          user: ${{ secrets.NUGET_USER }}
-    
+          input: ${{ env.SLNX_FILE }}
+          base: ${{ steps.find-base.outputs.base_ref }}
+          filter: GeneratePackageOnBuild=true
+
+      - name: Read version metadata
+        id: read-versions
+        uses: ./.github/actions/read-dotnet-version
+        with:
+          input: ${{ env.SLNX_FILE }}
+          filter: GeneratePackageOnBuild=true
+          create_tags: 'true'
+
       - name: Publish packages to NuGet
-        shell: pwsh
-        env:
-          NUGET_API_KEY: ${{steps.login.outputs.NUGET_API_KEY}}
-        run: |
-          $ErrorActionPreference = 'Stop'
-          $pkgs = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
-            Where-Object { $_.Name -notlike '*.symbols.nupkg' }
-
-          if (-not $pkgs) {
-            throw "No .nupkg files found to publish."
-          }
-
-          foreach ($pkg in $pkgs) {
-            Write-Host "Pushing $($pkg.FullName)"
-            dotnet nuget push "$($pkg.FullName)" --api-key "$env:NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
-          }
+        id: publish
+        uses: ./.github/actions/publish-dotnet-packages
+        with:
+          nuget_user: ${{ secrets.NUGET_USER }}
 
       - name: Create GitHub release and upload nupkg files
         uses: softprops/action-gh-release@v2
         with:
-          tag_name: ${{ steps.meta.outputs.release_tag }}
-          name: ${{ steps.meta.outputs.release_name }}
-          body: ${{ steps.meta.outputs.release_body }}
-          files: ${{ steps.meta.outputs.package_files }}
+          tag_name: ${{ steps.read-versions.outputs.release_tag }}
+          name: ${{ steps.read-versions.outputs.release_name }}
+          body: ${{ steps.read-versions.outputs.release_body }}
+          files: ${{ steps.publish.outputs.package_files }}

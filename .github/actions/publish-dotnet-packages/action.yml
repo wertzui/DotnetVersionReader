@@ -1,0 +1,65 @@
+name: 'Publish .NET packages to NuGet'
+description: 'Collects .nupkg and .snupkg files, logs in to NuGet via OIDC, and publishes all packages. Outputs the list of package files for use in a subsequent GitHub release step.'
+
+inputs:
+  nuget_user:
+    description: 'NuGet username for OIDC login (typically stored as a repository secret).'
+    required: true
+
+outputs:
+  package_files:
+    description: 'Newline-separated list of all .nupkg and .snupkg file paths that were published.'
+    value: ${{ steps.collect.outputs.package_files }}
+
+runs:
+  using: composite
+  steps:
+    - name: Collect package files
+      id: collect
+      shell: pwsh
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $packages = Get-ChildItem -Path . -Recurse -File |
+          Where-Object { ($_.Extension -eq '.nupkg' -or $_.Extension -eq '.snupkg') -and $_.Name -notlike '*.symbols.nupkg' }
+
+        if (-not $packages) {
+          throw "No .nupkg files were produced."
+        }
+
+        $pkgFilesJoined = ($packages | ForEach-Object { $_.FullName }) -join "`n"
+
+        "package_files<<EOF" >> $env:GITHUB_OUTPUT
+        $pkgFilesJoined      >> $env:GITHUB_OUTPUT
+        "EOF"                >> $env:GITHUB_OUTPUT
+
+    - name: NuGet login (OIDC → temp API key)
+      id: login
+      uses: NuGet/login@v1
+      with:
+        user: ${{ inputs.nuget_user }}
+
+    - name: Publish packages to NuGet
+      shell: pwsh
+      env:
+        NUGET_API_KEY: ${{ steps.login.outputs.NUGET_API_KEY }}
+      run: |
+        $ErrorActionPreference = 'Stop'
+
+        $pkgs = Get-ChildItem -Path . -Recurse -File -Filter *.nupkg |
+          Where-Object { $_.Name -notlike '*.symbols.nupkg' }
+
+        if (-not $pkgs) {
+          throw "No .nupkg files found to publish."
+        }
+
+        foreach ($pkg in $pkgs) {
+          Write-Host "Pushing $($pkg.FullName)"
+          dotnet nuget push "$($pkg.FullName)" --api-key "$env:NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+        }
+
+        $snupkgs = Get-ChildItem -Path . -Recurse -File -Filter *.snupkg
+        foreach ($snupkg in $snupkgs) {
+          Write-Host "Pushing symbols $($snupkg.FullName)"
+          dotnet nuget push "$($snupkg.FullName)" --api-key "$env:NUGET_API_KEY" --source "https://api.nuget.org/v3/index.json" --skip-duplicate
+        }
