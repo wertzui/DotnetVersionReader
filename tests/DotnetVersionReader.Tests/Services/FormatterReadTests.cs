@@ -6,12 +6,12 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace DotnetVersion.Tests.Services;
 
 [TestClass]
-public sealed class OutputFormatterTests
+public sealed class FormatterReadTests
 {
-    private OutputFormatter _formatter = null!;
+    private Formatter _formatter = null!;
 
     [TestInitialize]
-    public void Setup() => _formatter = new OutputFormatter();
+    public void Setup() => _formatter = new Formatter();
 
     // -------------------------------------------------------------------------
     // JSON output
@@ -20,7 +20,7 @@ public sealed class OutputFormatterTests
     [TestMethod]
     public void Format_Json_EmptyList_ReturnsEmptyJsonArray()
     {
-        var output = _formatter.Format([], OutputFormat.Json);
+        var output = _formatter.Format([], OutputFormat.Json, Formatter.ReadOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output);
         Assert.IsNotNull(array);
         Assert.AreEqual(0, array.Length);
@@ -30,7 +30,7 @@ public sealed class OutputFormatterTests
     public void Format_Json_SingleItem_ContainsNameAndVersion()
     {
         var items  = new[] { MakeInfo("Alpha", "1.0.0") };
-        var output = _formatter.Format(items, OutputFormat.Json);
+        var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
 
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output)!;
         Assert.AreEqual(1, array.Length);
@@ -42,7 +42,7 @@ public sealed class OutputFormatterTests
     public void Format_Json_SingleItem_ContainsMajorMinorPatch()
     {
         var items  = new[] { MakeInfo("Alpha", "3.2.1") };
-        var output = _formatter.Format(items, OutputFormat.Json);
+        var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
         var elem   = JsonSerializer.Deserialize<JsonElement[]>(output)![0];
 
         Assert.AreEqual(3, elem.GetProperty("Major").GetInt32());
@@ -54,7 +54,7 @@ public sealed class OutputFormatterTests
     public void Format_Json_SingleItem_SuffixIsNullWhenAbsent()
     {
         var items  = new[] { MakeInfo("Alpha", "1.0.0") };
-        var output = _formatter.Format(items, OutputFormat.Json);
+        var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
         var elem   = JsonSerializer.Deserialize<JsonElement[]>(output)![0];
 
         Assert.AreEqual(JsonValueKind.Null, elem.GetProperty("Suffix").ValueKind);
@@ -70,7 +70,7 @@ public sealed class OutputFormatterTests
             VersionPrefix = "2.0.0",
             VersionSuffix = "beta.1"
         };
-        var output = _formatter.Format([info], OutputFormat.Json);
+        var output = _formatter.Format([info], OutputFormat.Json, Formatter.ReadOptions);
         var elem   = JsonSerializer.Deserialize<JsonElement[]>(output)![0];
 
         Assert.AreEqual("beta.1", elem.GetProperty("Suffix").GetString());
@@ -84,7 +84,7 @@ public sealed class OutputFormatterTests
             MakeInfo("Alpha", "1.0.0"),
             MakeInfo("Beta",  "2.0.0-rc.1")
         };
-        var output = _formatter.Format(items, OutputFormat.Json);
+        var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output)!;
 
         Assert.AreEqual(2, array.Length);
@@ -100,7 +100,7 @@ public sealed class OutputFormatterTests
             VersionPrefix = "3.0.0",
             VersionSuffix = "preview.1"
         };
-        var output = _formatter.Format([info], OutputFormat.Json);
+        var output = _formatter.Format([info], OutputFormat.Json, Formatter.ReadOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output)!;
 
         Assert.AreEqual("3.0.0-preview.1", array[0].GetProperty("Version").GetString());
@@ -113,7 +113,7 @@ public sealed class OutputFormatterTests
     [TestMethod]
     public void Format_Table_EmptyList_ReturnsEmptyString()
     {
-        var output = _formatter.Format([], OutputFormat.Table);
+        var output = _formatter.Format([], OutputFormat.Table, Formatter.ReadOptions);
         Assert.AreEqual(string.Empty, output);
     }
 
@@ -121,7 +121,7 @@ public sealed class OutputFormatterTests
     public void Format_Table_ContainsHeaderLine()
     {
         var items  = new[] { MakeInfo("Alpha", "1.0.0") };
-        var output = _formatter.Format(items, OutputFormat.Table);
+        var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
         StringAssert.Contains(output, "Name");
         StringAssert.Contains(output, "Version");
@@ -135,7 +135,7 @@ public sealed class OutputFormatterTests
     public void Format_Table_ContainsSeparatorLine()
     {
         var items  = new[] { MakeInfo("Alpha", "1.0.0") };
-        var output = _formatter.Format(items, OutputFormat.Table);
+        var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
         var lines  = output.Split(Environment.NewLine);
 
         // ConsoleTables Markdown: second line is the separator, e.g. "| --- | --- |"
@@ -147,7 +147,7 @@ public sealed class OutputFormatterTests
     public void Format_Table_ContainsProjectNameAndVersion()
     {
         var items  = new[] { MakeInfo("MyProject", "2.3.4") };
-        var output = _formatter.Format(items, OutputFormat.Table);
+        var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
         StringAssert.Contains(output, "MyProject");
         StringAssert.Contains(output, "2.3.4");
@@ -161,7 +161,7 @@ public sealed class OutputFormatterTests
             MakeInfo("Alpha", "1.0.0"),
             MakeInfo("Beta",  "2.0.0")
         };
-        var output = _formatter.Format(items, OutputFormat.Table);
+        var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
         StringAssert.Contains(output, "Alpha");
         StringAssert.Contains(output, "Beta");
@@ -172,16 +172,13 @@ public sealed class OutputFormatterTests
     {
         var items = new[]
         {
-            MakeInfo("ShortName", "1.0.0"),
+            MakeInfo("ShortName",            "1.0.0"),
             MakeInfo("AVeryLongProjectName", "2.0.0-beta.1")
         };
-        var output = _formatter.Format(items, OutputFormat.Table);
-        var lines  = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
-
-        // ConsoleTables Markdown output: every line starts and ends with '|'
-        // and cells are separated by '|', so all lines should have the same
-        // number of pipe characters.
+        var output     = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
+        var lines      = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         var pipeCounts = lines.Select(l => l.Count(c => c == '|')).Distinct().ToArray();
+
         Assert.AreEqual(1, pipeCounts.Length,
             $"Expected identical pipe counts on every line, got: [{string.Join(", ", pipeCounts)}]");
     }
@@ -193,14 +190,14 @@ public sealed class OutputFormatterTests
     [TestMethod]
     public void Format_Version_EmptyList_ReturnsEmptyString()
     {
-        var output = _formatter.Format([], OutputFormat.Version);
+        var output = _formatter.Format([], OutputFormat.Version, Formatter.ReadOptions);
         Assert.AreEqual(string.Empty, output);
     }
 
     [TestMethod]
     public void Format_Version_SingleItem_ReturnsVersionString()
     {
-        var output = _formatter.Format([MakeInfo("MyLib", "3.2.1")], OutputFormat.Version);
+        var output = _formatter.Format([MakeInfo("MyLib", "3.2.1")], OutputFormat.Version, Formatter.ReadOptions);
         Assert.AreEqual("3.2.1", output);
     }
 
@@ -214,7 +211,7 @@ public sealed class OutputFormatterTests
             VersionPrefix = "2.0.0",
             VersionSuffix = "beta.1"
         };
-        var output = _formatter.Format([info], OutputFormat.Version);
+        var output = _formatter.Format([info], OutputFormat.Version, Formatter.ReadOptions);
         Assert.AreEqual("2.0.0-beta.1", output);
     }
 
@@ -227,7 +224,7 @@ public sealed class OutputFormatterTests
             MakeInfo("Beta",  "2.0.0")
         };
         var ex = Assert.ThrowsException<InvalidOperationException>(
-            () => _formatter.Format(items, OutputFormat.Version));
+            () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
         StringAssert.Contains(ex.Message, "Alpha");
         StringAssert.Contains(ex.Message, "Beta");
@@ -244,9 +241,54 @@ public sealed class OutputFormatterTests
             MakeInfo("C", "3.0.0")
         };
         var ex = Assert.ThrowsException<InvalidOperationException>(
-            () => _formatter.Format(items, OutputFormat.Version));
+            () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
         StringAssert.Contains(ex.Message, "3");
+    }
+
+    // -------------------------------------------------------------------------
+    // List output
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Format_List_EmptyList_ReturnsEmptyString()
+    {
+        var output = _formatter.Format([], OutputFormat.List, Formatter.ReadOptions);
+        Assert.AreEqual(string.Empty, output);
+    }
+
+    [TestMethod]
+    public void Format_List_SingleItem_ReturnsNameSpaceVersion()
+    {
+        var output = _formatter.Format([MakeInfo("MyLib", "1.2.3")], OutputFormat.List, Formatter.ReadOptions);
+        Assert.AreEqual("MyLib 1.2.3", output);
+    }
+
+    [TestMethod]
+    public void Format_List_MultipleItems_OneLineEach()
+    {
+        var items = new[]
+        {
+            MakeInfo("Alpha", "1.0.0"),
+            MakeInfo("Beta",  "2.0.0-rc.1")
+        };
+        var output = _formatter.Format(items, OutputFormat.List, Formatter.ReadOptions);
+        var lines  = output.Split(Environment.NewLine);
+
+        Assert.AreEqual(2, lines.Length);
+        Assert.AreEqual("Alpha 1.0.0",     lines[0]);
+        Assert.AreEqual("Beta 2.0.0-rc.1", lines[1]);
+    }
+
+    [TestMethod]
+    public void Format_List_NoHeadersOrBullets()
+    {
+        var items  = new[] { MakeInfo("MyLib", "1.0.0") };
+        var output = _formatter.Format(items, OutputFormat.List, Formatter.ReadOptions);
+
+        Assert.IsFalse(output.Contains("|"),  "List output must not contain table pipes");
+        Assert.IsFalse(output.Contains("-"),  "List output must not contain bullets or separators");
+        Assert.IsFalse(output.Contains("#"),  "List output must not contain headers");
     }
 
     // -------------------------------------------------------------------------
@@ -259,4 +301,3 @@ public sealed class OutputFormatterTests
             Version  = version
         };
 }
-

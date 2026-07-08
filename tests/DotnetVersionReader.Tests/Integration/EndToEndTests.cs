@@ -131,7 +131,7 @@ public sealed class EndToEndTests
     {
         var locator   = new CsprojLocator();
         var parser    = new CsprojParser();
-        var formatter = new OutputFormatter();
+        var formatter = new Formatter();
 
         var csprojFiles = locator.Locate(input);
         var results     = new List<ProjectVersionInfo>();
@@ -146,7 +146,7 @@ public sealed class EndToEndTests
                 results.Add(info);
         }
 
-        return formatter.Format(results, format);
+        return formatter.Format(results, format, Formatter.ReadOptions);
     }
 }
 

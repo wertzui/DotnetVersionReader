@@ -6,12 +6,12 @@ using Microsoft.VisualStudio.TestTools.UnitTesting;
 namespace DotnetVersion.Tests.Services;
 
 [TestClass]
-public sealed class CheckFormatterTests
+public sealed class FormatterCheckTests
 {
-    private CheckFormatter _formatter = null!;
+    private Formatter _formatter = null!;
 
     [TestInitialize]
-    public void Setup() => _formatter = new CheckFormatter();
+    public void Setup() => _formatter = new Formatter();
 
     // -------------------------------------------------------------------------
     // JSON output
@@ -20,7 +20,7 @@ public sealed class CheckFormatterTests
     [TestMethod]
     public void Format_Json_EmptyList_ReturnsEmptyArray()
     {
-        var result = _formatter.Format([], OutputFormat.Json);
+        var result = _formatter.Format([], OutputFormat.Json, Formatter.CheckOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
         Assert.AreEqual(0, array.Length);
     }
@@ -40,14 +40,14 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var json  = _formatter.Format(results, OutputFormat.Json);
+        var json  = _formatter.Format(results, OutputFormat.Json, Formatter.CheckOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
         Assert.AreEqual(1, array.Length);
-        Assert.AreEqual("MyLib",  array[0].GetProperty("Name").GetString());
-        Assert.AreEqual("2.0.0",  array[0].GetProperty("HeadVersion").GetString());
-        Assert.AreEqual("1.0.0",  array[0].GetProperty("BaseVersion").GetString());
-        Assert.AreEqual("Ok",     array[0].GetProperty("Status").GetString());
+        Assert.AreEqual("MyLib", array[0].GetProperty("Name").GetString());
+        Assert.AreEqual("2.0.0", array[0].GetProperty("HeadVersion").GetString());
+        Assert.AreEqual("1.0.0", array[0].GetProperty("BaseVersion").GetString());
+        Assert.AreEqual("Ok",    array[0].GetProperty("Status").GetString());
     }
 
     [TestMethod]
@@ -65,7 +65,7 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var json  = _formatter.Format(results, OutputFormat.Json);
+        var json  = _formatter.Format(results, OutputFormat.Json, Formatter.CheckOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
         Assert.AreEqual("BumpRequired", array[0].GetProperty("Status").GetString());
@@ -86,7 +86,7 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var json  = _formatter.Format(results, OutputFormat.Json);
+        var json  = _formatter.Format(results, OutputFormat.Json, Formatter.CheckOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
         Assert.AreEqual(JsonValueKind.Null, array[0].GetProperty("BaseVersion").ValueKind);
@@ -100,7 +100,7 @@ public sealed class CheckFormatterTests
     [TestMethod]
     public void Format_Table_EmptyList_ReturnsEmpty()
     {
-        var result = _formatter.Format([], OutputFormat.Table);
+        var result = _formatter.Format([], OutputFormat.Table, Formatter.CheckOptions);
         Assert.AreEqual(string.Empty, result);
     }
 
@@ -119,7 +119,7 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var table = _formatter.Format(results, OutputFormat.Table);
+        var table = _formatter.Format(results, OutputFormat.Table, Formatter.CheckOptions);
 
         StringAssert.Contains(table, "MyLib");
         StringAssert.Contains(table, "2.0.0");
@@ -142,7 +142,7 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var table = _formatter.Format(results, OutputFormat.Table);
+        var table = _formatter.Format(results, OutputFormat.Table, Formatter.CheckOptions);
         StringAssert.Contains(table, "(new)");
     }
 
@@ -165,19 +165,18 @@ public sealed class CheckFormatterTests
             }
         };
 
-        var version = _formatter.Format(results, OutputFormat.Version);
+        var version = _formatter.Format(results, OutputFormat.Version, Formatter.CheckOptions);
         Assert.AreEqual("3.0.0", version);
     }
 
     [TestMethod]
     public void Format_Version_EmptyList_ReturnsEmpty()
     {
-        var result = _formatter.Format([], OutputFormat.Version);
+        var result = _formatter.Format([], OutputFormat.Version, Formatter.CheckOptions);
         Assert.AreEqual(string.Empty, result);
     }
 
     [TestMethod]
-    [ExpectedException(typeof(InvalidOperationException))]
     public void Format_Version_MultipleProjects_Throws()
     {
         var results = new List<CheckResult>
@@ -186,11 +185,11 @@ public sealed class CheckFormatterTests
             new() { Name = "B", FilePath = "B.csproj", HeadVersion = "2.0.0", BaseVersion = "1.0.0", Status = CheckResultStatus.Ok }
         };
 
-        _formatter.Format(results, OutputFormat.Version);
+        Assert.ThrowsException<InvalidOperationException>(
+            () => _formatter.Format(results, OutputFormat.Version, Formatter.CheckOptions));
     }
 
     [TestMethod]
-    [ExpectedException(typeof(InvalidOperationException))]
     public void Format_Version_BumpRequired_Throws()
     {
         var results = new List<CheckResult>
@@ -205,6 +204,54 @@ public sealed class CheckFormatterTests
             }
         };
 
-        _formatter.Format(results, OutputFormat.Version);
+        Assert.ThrowsException<InvalidOperationException>(
+            () => _formatter.Format(results, OutputFormat.Version, Formatter.CheckOptions));
+    }
+
+    // -------------------------------------------------------------------------
+    // List output
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Format_List_EmptyList_ReturnsEmptyString()
+    {
+        var result = _formatter.Format([], OutputFormat.List, Formatter.CheckOptions);
+        Assert.AreEqual(string.Empty, result);
+    }
+
+    [TestMethod]
+    public void Format_List_SingleItem_ReturnsNameSpaceHeadVersion()
+    {
+        var results = new List<CheckResult>
+        {
+            new()
+            {
+                Name        = "MyLib",
+                FilePath    = "MyLib.csproj",
+                HeadVersion = "2.0.0",
+                BaseVersion = "1.0.0",
+                Status      = CheckResultStatus.Ok
+            }
+        };
+
+        var output = _formatter.Format(results, OutputFormat.List, Formatter.CheckOptions);
+        Assert.AreEqual("MyLib 2.0.0", output);
+    }
+
+    [TestMethod]
+    public void Format_List_MultipleItems_OneLineEach()
+    {
+        var results = new List<CheckResult>
+        {
+            new() { Name = "Alpha", FilePath = "A.csproj", HeadVersion = "1.0.0", BaseVersion = "0.9.0", Status = CheckResultStatus.Ok },
+            new() { Name = "Beta",  FilePath = "B.csproj", HeadVersion = "2.0.0", BaseVersion = "2.0.0", Status = CheckResultStatus.BumpRequired }
+        };
+
+        var output = _formatter.Format(results, OutputFormat.List, Formatter.CheckOptions);
+        var lines  = output.Split(Environment.NewLine);
+
+        Assert.AreEqual(2, lines.Length);
+        Assert.AreEqual("Alpha 1.0.0", lines[0]);
+        Assert.AreEqual("Beta 2.0.0",  lines[1]);
     }
 }
