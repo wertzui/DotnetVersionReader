@@ -3,7 +3,7 @@
 ![DotnetVersionReader logo](logo.png)
 
 A .NET global tool for reading version information from `.csproj`, `.sln`, and `.slnx` files,
-and for enforcing version bumps in pull requests.
+for enforcing version bumps in pull requests, and for showing which projects had their version changed.
 
 [![Build, Test, Pack, Publish](https://github.com/wertzui/DotnetVersionReader/actions/workflows/build-test-pack-publish.yml/badge.svg)](https://github.com/wertzui/DotnetVersionReader/actions/workflows/build-test-pack-publish.yml)
 [![NuGet](https://img.shields.io/nuget/v/DotnetVersionReader)](https://www.nuget.org/packages/DotnetVersionReader)
@@ -31,6 +31,7 @@ dotnet-version [command] [options]
 Commands:
   read    Reads and displays version information from .csproj files. (default)
   check   Checks that every project whose source files have changed has had its version bumped.
+  diff    Shows projects whose version has changed (or that are new) relative to a base branch.
 ```
 
 ---
@@ -51,7 +52,7 @@ dotnet-version read     [--input <path>] [options]
 | Option | Short | Description |
 | -------- | ------- | ------------- |
 | `--input` | `-i` | Path to a `.csproj`, `.sln`, `.slnx` file **or** a folder. Defaults to the current directory. |
-| `--output` | `-o` | Output format: `json` (default), `table`, or `version` (single project only). |
+| `--output` | `-o` | Output format: `json` (default), `table`, `list`, or `version` (single project only). |
 | `--filter` | `-f` | Filter in the form `XmlNode=Value`. Value can be a regex. Repeatable. |
 | `--schema` | | Print the JSON schema for `--output json` and exit. Defaults to `false`. |
 
@@ -107,9 +108,22 @@ dotnet-version read -i MySolution.slnx -f "TargetFramework=^net10\.0$" -f "Gener
 
 ```text
 | Name      | Version    | Major | Minor | Patch | Suffix |
-|-----------|------------|-------|-------|-------|--------|
+| --------- | ---------- | ----- | ----- | ----- | ------ |
 | MyLibrary | 2.1.0-rc.1 | 2     | 1     | 0     | rc.1   |
 | MyApp     | 1.0.0      | 1     | 0     | 0     |        |
+```
+
+#### Sample list output
+
+```text
+MyLibrary 2.1.0-rc.1
+MyApp 1.0.0
+```
+
+#### Sample version output
+
+```text
+2.1.0-rc.1
 ```
 
 ---
@@ -241,6 +255,109 @@ jobs:
 ```
 
 > **Important:** `fetch-depth: 0` (or at least enough history to reach the base branch) is required; a shallow clone will cause `git diff` to fail.
+
+---
+
+### `dotnet-version diff` — show version changes relative to a base branch
+
+Shows all projects whose version has changed (or that are brand-new) compared to a base branch.
+Unlike `check`, this command **never exits with a non-zero code based on results** — it is a
+pure informational diff, useful for release notes, changelogs, or scripting.
+
+```bash
+dotnet-version diff [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
+
+# Short aliases (--base defaults to origin/main):
+dotnet-version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
+```
+
+#### Options
+
+| Option | Short | Description |
+| -------- | ------- | ------------- |
+| `--input` | `-i` | Path to a `.csproj`, `.sln`, `.slnx` file **or** a folder. Defaults to the current directory. |
+| `--base` | `-b` | The git ref to compare against. Defaults to `origin/main`. |
+| `--head` | | The git ref for the current state. Defaults to `HEAD`. |
+| `--output` | `-o` | Output format: `json` (default), `table`, `list`, or `version` (single project only). |
+| `--filter` | `-f` | Filter in the form `XmlNode=Value`. Only matching projects are considered. Value can be a regex. Repeatable. |
+
+#### Exit codes
+
+| Code | Meaning |
+| ------ | --------- |
+| `0` | Command completed successfully (regardless of how many projects changed). |
+| `2` | Usage or argument error (bad input path, git not found, etc.). |
+
+#### How it works
+
+Uses the same git/dependency-graph pipeline as `check` (steps 1–4 are identical), but at step 5
+only keeps projects whose version on `<head>` **differs** from the version on `<base>` (or projects
+that are brand-new). Projects whose version is unchanged are silently omitted.
+
+#### Examples
+
+```bash
+# Show changed versions against origin/main (default)
+dotnet-version diff
+dotnet-version diff --base origin/main
+
+# Scope to a specific solution file
+dotnet-version diff --input MySolution.slnx --base origin/main
+dotnet-version diff -i MySolution.slnx -b origin/main
+
+# Table output
+dotnet-version diff --input MySolution.slnx --base origin/main --output table
+
+# Simple list output – handy for release notes
+dotnet-version diff --input MySolution.slnx --base origin/main --output list
+
+# Only projects that produce a NuGet package
+dotnet-version diff --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
+```
+
+#### Sample JSON output
+
+```json
+[
+  {
+    "Name": "MyLib",
+    "FilePath": "src/MyLib/MyLib.csproj",
+    "HeadVersion": "2.0.0",
+    "BaseVersion": "1.0.0",
+    "Status": "Bumped"
+  },
+  {
+    "Name": "MyNewLib",
+    "FilePath": "src/MyNewLib/MyNewLib.csproj",
+    "HeadVersion": "1.0.0",
+    "BaseVersion": null,
+    "Status": "NewProject"
+  }
+]
+```
+
+Possible `Status` values:
+
+| Value | Meaning |
+| ------- | --------- |
+| `Bumped` | The version was bumped relative to the base branch. |
+| `NewProject` | The project did not exist on the base branch. |
+
+#### Sample table output
+
+```
+| Name      | HeadVersion | BaseVersion | Status     |
+|-----------|-------------|-------------|------------|
+| MyLib     | 2.0.0       | 1.0.0       | Bumped     |
+| MyNewLib  | 1.0.0       |             | NewProject |
+```
+
+#### Sample list output
+
+```text
+MyLib 2.0.0
+MyNewLib 1.0.0
+```
 
 ---
 

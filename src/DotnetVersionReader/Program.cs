@@ -136,7 +136,7 @@ async Task RunRead(string? input, OutputFormat output, string[] filters, bool sc
     var parsedFilters = ParseFilters(filters);
     var csprojFiles   = LocateAndFilter(input, parsedFilters, requireNonEmpty: false);
     var parser        = new CsprojParser();
-    var formatter     = new OutputFormatter();
+    var formatter     = new Formatter();
 
     var results = new List<ProjectVersionInfo>();
     foreach (var file in csprojFiles)
@@ -152,7 +152,7 @@ async Task RunRead(string? input, OutputFormat output, string[] filters, bool sc
     string formatted;
     try
     {
-        formatted = formatter.Format(results, output);
+        formatted = formatter.Format(results, output, Formatter.ReadOptions);
     }
     catch (InvalidOperationException ex)
     {
@@ -207,7 +207,7 @@ checkCommand.SetHandler(async (
     var parser    = new CsprojParser();
     var graphSvc  = new DependencyGraphService();
     var gitSvc    = new GitService(parser);
-    var formatter = new CheckFormatter();
+    var formatter = new Formatter();
 
     // 1. Locate and filter .csproj files
     var parsedFilters = ParseFilters(filters);
@@ -277,7 +277,7 @@ checkCommand.SetHandler(async (
     string formatted;
     try
     {
-        formatted = formatter.Format(results, output);
+        formatted = formatter.Format(results, output, Formatter.CheckOptions);
     }
     catch (InvalidOperationException ex)
     {
@@ -296,8 +296,129 @@ checkCommand.SetHandler(async (
 },
 checkInputOption, baseRefOption, headRefOption, checkOutputOption, checkFilterOption);
 
+// ---------------------------------------------------------------------------
+// `diff` subcommand  (show projects whose version changed relative to a base branch)
+// ---------------------------------------------------------------------------
+
+var diffInputOption  = MakeInputOption();
+var diffOutputOption = MakeOutputOption();
+var diffFilterOption = MakeFilterOption();
+
+var diffBaseRefOption = new Option<string>(
+    aliases: ["--base", "-b"],
+    description: "The git ref to compare against. Defaults to origin/main.",
+    getDefaultValue: () => "origin/main");
+
+var diffHeadRefOption = new Option<string>(
+    aliases: ["--head"],
+    description: "The git ref representing the current state. Defaults to HEAD.",
+    getDefaultValue: () => "HEAD");
+
+var diffCommand = new Command(
+    "diff",
+    "Shows projects whose version has changed (or that are new) relative to --base. Does not exit with a non-zero code based on results.")
+{
+    diffInputOption,
+    diffBaseRefOption,
+    diffHeadRefOption,
+    diffOutputOption,
+    diffFilterOption
+};
+
+diffCommand.SetHandler(async (
+    string?      input,
+    string       baseRef,
+    string       headRef,
+    OutputFormat output,
+    string[]     filters) =>
+{
+    var parser    = new CsprojParser();
+    var graphSvc  = new DependencyGraphService();
+    var gitSvc    = new GitService(parser);
+    var formatter = new Formatter();
+
+    // 1. Locate and filter .csproj files
+    var parsedFilters = ParseFilters(filters);
+    var csprojFiles   = LocateAndFilter(input, parsedFilters, requireNonEmpty: true);
+
+    // 2. Determine the repository root
+    string repoRoot;
+    try
+    {
+        var anyProjectDir = Path.GetDirectoryName(csprojFiles[0]) ?? Directory.GetCurrentDirectory();
+        repoRoot = gitSvc.GetRepositoryRoot(anyProjectDir);
+    }
+    catch (InvalidOperationException ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(2);
+        return;
+    }
+
+    // 3. Determine which files changed
+    IReadOnlyList<string> changedFiles;
+    try
+    {
+        changedFiles = gitSvc.GetChangedFiles(baseRef, headRef, repoRoot);
+    }
+    catch (InvalidOperationException ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(2);
+        return;
+    }
+
+    // 4. Build dependency graph and find affected projects
+    var graph            = graphSvc.Build(csprojFiles);
+    var affectedProjects = graphSvc.GetAffectedProjects(changedFiles, graph);
+
+    // 5. For each affected project compare head vs base version; keep only those that changed
+    var results = new List<DiffResult>();
+    foreach (var node in affectedProjects)
+    {
+        var headInfo = parser.Parse(node.CsprojPath);
+        if (headInfo is null)
+            continue;
+
+        var headVersion = headInfo.ResolvedVersion;
+        var baseVersion = gitSvc.GetVersionAtRef(baseRef, node.CsprojPath, repoRoot);
+
+        // Skip projects where the version has NOT changed
+        if (baseVersion is not null &&
+            string.Equals(headVersion, baseVersion, StringComparison.OrdinalIgnoreCase))
+            continue;
+
+        results.Add(new DiffResult
+        {
+            Name        = headInfo.Name,
+            FilePath    = node.CsprojPath,
+            HeadVersion = headVersion,
+            BaseVersion = baseVersion,
+            Status      = baseVersion is null ? DiffResultStatus.NewProject : DiffResultStatus.Bumped
+        });
+    }
+
+    // 6. Format and print
+    string formatted;
+    try
+    {
+        formatted = formatter.Format(results, output, Formatter.DiffOptions);
+    }
+    catch (InvalidOperationException ex)
+    {
+        Console.Error.WriteLine($"Error: {ex.Message}");
+        Environment.Exit(2);
+        return;
+    }
+
+    Console.WriteLine(formatted);
+    await Task.CompletedTask;
+},
+diffInputOption, diffBaseRefOption, diffHeadRefOption, diffOutputOption, diffFilterOption);
+
 rootCommand.AddCommand(readCommand);
 rootCommand.AddCommand(checkCommand);
+rootCommand.AddCommand(diffCommand);
 
 // ---------------------------------------------------------------------------
 // Default-subcommand injection

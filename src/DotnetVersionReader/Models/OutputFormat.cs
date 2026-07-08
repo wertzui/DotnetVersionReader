@@ -12,6 +12,11 @@ public enum OutputFormat
     /// <summary>
     /// Outputs the bare version string. Fails if more than one project is found.
     /// </summary>
-    Version
+    Version,
+
+    /// <summary>
+    /// Plain list of "Name Version" lines, one per project, with no headers or bullets.
+    /// </summary>
+    List
 }
 
