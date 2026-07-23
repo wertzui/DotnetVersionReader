@@ -335,6 +335,7 @@ diffCommand.SetHandler(async (
     var parser    = new CsprojParser();
     var graphSvc  = new DependencyGraphService();
     var gitSvc    = new GitService(parser);
+    var diffSvc   = new DiffService();
     var formatter = new Formatter();
 
     // 1. Locate and filter .csproj files
@@ -372,31 +373,23 @@ diffCommand.SetHandler(async (
     var graph            = graphSvc.Build(csprojFiles);
     var affectedProjects = graphSvc.GetAffectedProjects(changedFiles, graph);
 
-    // 5. For each affected project compare head vs base version; keep only those that changed
-    var results = new List<DiffResult>();
+    // 5. Parse head info for all affected projects once; build name-keyed lookups
+    var headInfoByName = new Dictionary<string, (string FilePath, string HeadVersion)>(StringComparer.OrdinalIgnoreCase);
     foreach (var node in affectedProjects)
     {
         var headInfo = parser.Parse(node.CsprojPath);
         if (headInfo is null)
             continue;
-
-        var headVersion = headInfo.ResolvedVersion;
-        var baseVersion = gitSvc.GetVersionAtRef(baseRef, node.CsprojPath, repoRoot);
-
-        // Skip projects where the version has NOT changed
-        if (baseVersion is not null &&
-            string.Equals(headVersion, baseVersion, StringComparison.OrdinalIgnoreCase))
-            continue;
-
-        results.Add(new DiffResult
-        {
-            Name        = headInfo.Name,
-            FilePath    = node.CsprojPath,
-            HeadVersion = headVersion,
-            BaseVersion = baseVersion,
-            Status      = baseVersion is null ? DiffResultStatus.NewProject : DiffResultStatus.Bumped
-        });
+        headInfoByName[headInfo.Name] = (node.CsprojPath, headInfo.ResolvedVersion);
     }
+
+    // 6. For each parsed project compare head vs base version; keep only those that changed
+    var results = diffSvc.BuildResults(
+        affectedProjects: headInfoByName.Select(kvp => (kvp.Key, kvp.Value.FilePath)),
+        getHeadVersion:   name => headInfoByName.TryGetValue(name, out var h) ? h.HeadVersion : null,
+        getBaseVersion:   name => headInfoByName.TryGetValue(name, out var h)
+                                      ? gitSvc.GetVersionAtRef(baseRef, h.FilePath, repoRoot)
+                                      : null);
 
     // 6. Format and print
     string formatted;

@@ -23,10 +23,13 @@ dotnet tool install --global DotnetVersionReader --version <version> --add-sourc
 
 ---
 
-## Commands
+## Usage
+
+Note that `dotnet version` and `dotnet-version` can both be used to invoke the application.
+The first one is through the `dotnet` CLI, while the second one directly invokes this programm.
 
 ```bash
-dotnet-version [command] [options]
+dotnet version [command] [options]
 
 Commands:
   read    Reads and displays version information from .csproj files. (default)
@@ -36,15 +39,15 @@ Commands:
 
 ---
 
-### `dotnet-version read` — read versions (default)
+### `dotnet version read` — read versions (default)
 
 Reads and displays version information. This is the **default command**: running
-`dotnet-version` with no subcommand is equivalent to `dotnet-version read`.
+`dotnet version` with no subcommand is equivalent to `dotnet version read`.
 
 ```bash
 # Both forms are equivalent:
-dotnet-version          [--input <path>] [options]
-dotnet-version read     [--input <path>] [options]
+dotnet version          [--input <path>] [options]
+dotnet version read     [--input <path>] [options]
 ```
 
 #### Options
@@ -67,18 +70,18 @@ The tool follows MSBuild semantics:
 
 ```bash
 # Current directory – JSON output (default, both forms are equivalent)
-dotnet-version
-dotnet-version read
+dotnet version
+dotnet version read
 
 # Specific solution file – table output
-dotnet-version read --input MySolution.slnx --output table
-dotnet-version read -i MySolution.slnx -o table
+dotnet version read --input MySolution.slnx --output table
+dotnet version read -i MySolution.slnx -o table
 
 # Only projects that generate a NuGet package
-dotnet-version read --filter "GeneratePackageOnBuild=true"
+dotnet version read --filter "GeneratePackageOnBuild=true"
 
 # Combine multiple filters (all must match)
-dotnet-version read -i MySolution.slnx -f "TargetFramework=^net10\.0$" -f "GeneratePackageOnBuild=true"
+dotnet version read -i MySolution.slnx -f "TargetFramework=^net10\.0$" -f "GeneratePackageOnBuild=true"
 ```
 
 #### Sample JSON output
@@ -128,16 +131,16 @@ MyApp 1.0.0
 
 ---
 
-### `dotnet-version check` — enforce version bumps in PRs
+### `dotnet version check` — enforce version bumps in PRs
 
 Checks that every project whose source files have changed (compared to a base branch)
 has had its version bumped. Designed to run as a CI gate on pull requests.
 
 ```bash
-dotnet-version check [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
+dotnet version check [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
 
 # Short aliases (--base defaults to origin/main):
-dotnet-version check [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
+dotnet version check [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
 ```
 
 #### Options
@@ -171,21 +174,21 @@ dotnet-version check [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <Xm
 
 ```bash
 # Check current directory against origin/main (default, both are equivalent)
-dotnet-version check
-dotnet-version check --base origin/main
+dotnet version check
+dotnet version check --base origin/main
 
 # Scope to a specific solution file
-dotnet-version check --input MySolution.slnx --base origin/main
-dotnet-version check -i MySolution.slnx -b origin/main
+dotnet version check --input MySolution.slnx --base origin/main
+dotnet version check -i MySolution.slnx -b origin/main
 
 # Table output
-dotnet-version check --input MySolution.slnx --base origin/main --output table
+dotnet version check --input MySolution.slnx --base origin/main --output table
 
 # Single project, bare version output (useful for scripts)
-dotnet-version check --input src/MyLib/MyLib.csproj --base origin/main --output version
+dotnet version check --input src/MyLib/MyLib.csproj --base origin/main --output version
 
 # Only check projects that produce a NuGet package
-dotnet-version check --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
+dotnet version check --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
 ```
 
 #### Sample JSON output
@@ -245,30 +248,30 @@ jobs:
 
       - uses: actions/setup-dotnet@v4
         with:
-          dotnet-version: 10.0.x
+          dotnet version: 10.0.x
 
-      - name: Install dotnet-version
+      - name: Install dotnet version
         run: dotnet tool install --global DotnetVersionReader
 
       - name: Check version bumps
-        run: dotnet-version check --input MySolution.slnx --base origin/main
+        run: dotnet version check --input MySolution.slnx --base origin/main
 ```
 
 > **Important:** `fetch-depth: 0` (or at least enough history to reach the base branch) is required; a shallow clone will cause `git diff` to fail.
 
 ---
 
-### `dotnet-version diff` — show version changes relative to a base branch
+### `dotnet version diff` — show version changes relative to a base branch
 
 Shows all projects whose version has changed (or that are brand-new) compared to a base branch.
 Unlike `check`, this command **never exits with a non-zero code based on results** — it is a
 pure informational diff, useful for release notes, changelogs, or scripting.
 
 ```bash
-dotnet-version diff [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
+dotnet version diff [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
 
 # Short aliases (--base defaults to origin/main):
-dotnet-version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
+dotnet version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
 ```
 
 #### Options
@@ -298,21 +301,21 @@ that are brand-new). Projects whose version is unchanged are silently omitted.
 
 ```bash
 # Show changed versions against origin/main (default)
-dotnet-version diff
-dotnet-version diff --base origin/main
+dotnet version diff
+dotnet version diff --base origin/main
 
 # Scope to a specific solution file
-dotnet-version diff --input MySolution.slnx --base origin/main
-dotnet-version diff -i MySolution.slnx -b origin/main
+dotnet version diff --input MySolution.slnx --base origin/main
+dotnet version diff -i MySolution.slnx -b origin/main
 
 # Table output
-dotnet-version diff --input MySolution.slnx --base origin/main --output table
+dotnet version diff --input MySolution.slnx --base origin/main --output table
 
 # Simple list output – handy for release notes
-dotnet-version diff --input MySolution.slnx --base origin/main --output list
+dotnet version diff --input MySolution.slnx --base origin/main --output list
 
 # Only projects that produce a NuGet package
-dotnet-version diff --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
+dotnet version diff --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
 ```
 
 #### Sample JSON output
@@ -373,50 +376,3 @@ dotnet test DotnetVersionReader.slnx
 # Pack
 dotnet pack DotnetVersionReader.slnx -c Release
 ```
-
-## CI / CD
-
-The repository uses two GitHub Actions workflows.
-
-### `check-version-bump.yml` — PR gate
-
-Runs on every pull request targeting `main`. Builds the tool from source and
-runs `dotnet-version check` to ensure every NuGet-publishable project that
-changed has had its version bumped.
-
-```bash
-dotnet-version check --input DotnetVersionReader.slnx --filter "GeneratePackageOnBuild=true"
-```
-
-The PR **must pass** this check before merging.
-
-### `build-test-pack-publish.yml` — publish on push to `main`
-
-Runs automatically on every push to `main` and can also be triggered manually.
-
-### What the publish workflow does
-
-| Step | Details |
-| ------ | --------- |
-| **Restore** | `dotnet restore` against the `.slnx` solution file |
-| **Build** | `dotnet build -c Release` (no restore) |
-| **Test** | `dotnet test -c Release --no-build` |
-| **Check version bumps** | Runs `dotnet-version check` against the previous release tag — blocks publish if any package version was not bumped |
-| **Collect metadata** | Runs the freshly built `dotnet-version` with the solution file and `-f GeneratePackageOnBuild=true` to enumerate all package names + versions |
-| **Tag commits** | Pushes an annotated git tag per package (`<Name>-v<Version>`) plus one combined release tag |
-| **Publish to NuGet** | Pushes every `.nupkg` to `nuget.org` with `--skip-duplicate` |
-| **GitHub Release** | Creates a GitHub release on the combined tag and uploads all `.nupkg` files as assets |
-
-### Required repository secret
-
-| Secret | Description |
-| -------- | ------------- |
-| `NUGET_API_KEY` | API key from [nuget.org](https://www.nuget.org/account/apikeys) with push permission for the package(s) |
-
-Add it under **Settings → Secrets and variables → Actions → New repository secret**.
-
-### Manual dispatch
-
-The workflow can be triggered manually from the **Actions** tab.  
-An optional `slnx_file` input lets you override the solution path
-(default: `DotnetVersionReader.slnx`).
