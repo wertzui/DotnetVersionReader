@@ -219,7 +219,7 @@ public sealed class FormatterDiffTests
             new() { Name = "B", FilePath = "B.csproj", HeadVersion = "1.0.0", BaseVersion = null,    Status = DiffResultStatus.NewProject }
         };
 
-        var ex = Assert.ThrowsException<InvalidOperationException>(
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(results, OutputFormat.Version, Formatter.DiffOptions));
 
         StringAssert.Contains(ex.Message, "A");

@@ -10,20 +10,20 @@ using DotnetVersion.Services;
 // configured identically so the UX is uniform across commands.
 // ---------------------------------------------------------------------------
 
-static Option<string?> MakeInputOption() => new(
-    aliases: ["--input", "-i"],
-    description: "Path to a .csproj, .sln, .slnx file or a folder. Defaults to the current directory.",
-    getDefaultValue: () => null);
-
-static Option<OutputFormat> MakeOutputOption() => new(
-    aliases: ["--output", "-o"],
-    description: "Output format: json (default), table, or version (single project only).",
-    getDefaultValue: () => OutputFormat.Json);
-
-static Option<string[]> MakeFilterOption() => new Option<string[]>(
-    aliases: ["--filter", "-f"],
-    description: "Filter in the form 'XmlNode=Value' (value may be a regex). Can be specified multiple times.")
+static Option<string?> MakeInputOption() => new("--input", "-i")
 {
+    Description = "Path to a .csproj, .sln, .slnx file or a folder. Defaults to the current directory."
+};
+
+static Option<OutputFormat> MakeOutputOption() => new("--output", "-o")
+{
+    Description = "Output format: json (default), table, or version (single project only).",
+    DefaultValueFactory = _ => OutputFormat.Json
+};
+
+static Option<string[]> MakeFilterOption() => new Option<string[]>("--filter", "-f")
+{
+    Description = "Filter in the form 'XmlNode=Value' (value may be a regex). Can be specified multiple times.",
     AllowMultipleArgumentsPerToken = false,
     Arity = ArgumentArity.ZeroOrMore
 };
@@ -106,10 +106,10 @@ var rootCommand = new RootCommand(
 // `read` subcommand  (default: read / display versions)
 // ---------------------------------------------------------------------------
 
-var readSchemaOption = new Option<bool>(
-    name: "--schema",
-    description: "Print the JSON schema for the --output json format and exit.",
-    getDefaultValue: () => false);
+var readSchemaOption = new Option<bool>("--schema")
+{
+    Description = "Print the JSON schema for the --output json format and exit."
+};
 
 var readInputOption  = MakeInputOption();
 var readOutputOption = MakeOutputOption();
@@ -125,7 +125,7 @@ var readCommand = new Command(
     readSchemaOption
 };
 
-async Task RunRead(string? input, OutputFormat output, string[] filters, bool schema)
+static async Task RunRead(string? input, OutputFormat output, string[] filters, bool schema)
 {
     if (schema)
     {
@@ -165,8 +165,11 @@ async Task RunRead(string? input, OutputFormat output, string[] filters, bool sc
     await Task.CompletedTask;
 }
 
-readCommand.SetHandler(RunRead,
-    readInputOption, readOutputOption, readFilterOption, readSchemaOption);
+readCommand.SetAction((parseResult, _) => RunRead(
+    parseResult.GetValue(readInputOption),
+    parseResult.GetValue(readOutputOption),
+    parseResult.GetValue(readFilterOption) ?? [],
+    parseResult.GetValue(readSchemaOption)));
 
 // ---------------------------------------------------------------------------
 // `check` subcommand  (verify version bumps in a PR / branch diff)
@@ -176,15 +179,17 @@ var checkInputOption  = MakeInputOption();
 var checkOutputOption = MakeOutputOption();
 var checkFilterOption = MakeFilterOption();
 
-var baseRefOption = new Option<string>(
-    aliases: ["--base", "-b"],
-    description: "The git ref to compare against. All projects whose files differ between this ref and --head will be checked.",
-    getDefaultValue: () => "origin/main");
+var baseRefOption = new Option<string>("--base", "-b")
+{
+    Description = "The git ref to compare against. All projects whose files differ between this ref and --head will be checked.",
+    DefaultValueFactory = _ => "origin/main"
+};
 
-var headRefOption = new Option<string>(
-    aliases: ["--head"],
-    description: "The git ref representing the current (PR) state. Defaults to HEAD.",
-    getDefaultValue: () => "HEAD");
+var headRefOption = new Option<string>("--head")
+{
+    Description = "The git ref representing the current (PR) state. Defaults to HEAD.",
+    DefaultValueFactory = _ => "HEAD"
+};
 
 var checkCommand = new Command(
     "check",
@@ -197,13 +202,13 @@ var checkCommand = new Command(
     checkFilterOption
 };
 
-checkCommand.SetHandler(async (
-    string?      input,
-    string       baseRef,
-    string       headRef,
-    OutputFormat output,
-    string[]     filters) =>
+checkCommand.SetAction(async (parseResult, _) =>
 {
+    string?      input   = parseResult.GetValue(checkInputOption);
+    string       baseRef = parseResult.GetValue(baseRefOption)!;
+    string       headRef = parseResult.GetValue(headRefOption)!;
+    OutputFormat output  = parseResult.GetValue(checkOutputOption);
+    string[]     filters = parseResult.GetValue(checkFilterOption) ?? [];
     var parser    = new CsprojParser();
     var graphSvc  = new DependencyGraphService();
     var gitSvc    = new GitService(parser);
@@ -293,8 +298,7 @@ checkCommand.SetHandler(async (
         Environment.Exit(1);
 
     await Task.CompletedTask;
-},
-checkInputOption, baseRefOption, headRefOption, checkOutputOption, checkFilterOption);
+});
 
 // ---------------------------------------------------------------------------
 // `diff` subcommand  (show projects whose version changed relative to a base branch)
@@ -304,15 +308,17 @@ var diffInputOption  = MakeInputOption();
 var diffOutputOption = MakeOutputOption();
 var diffFilterOption = MakeFilterOption();
 
-var diffBaseRefOption = new Option<string>(
-    aliases: ["--base", "-b"],
-    description: "The git ref to compare against. Defaults to origin/main.",
-    getDefaultValue: () => "origin/main");
+var diffBaseRefOption = new Option<string>("--base", "-b")
+{
+    Description = "The git ref to compare against. Defaults to origin/main.",
+    DefaultValueFactory = _ => "origin/main"
+};
 
-var diffHeadRefOption = new Option<string>(
-    aliases: ["--head"],
-    description: "The git ref representing the current state. Defaults to HEAD.",
-    getDefaultValue: () => "HEAD");
+var diffHeadRefOption = new Option<string>("--head")
+{
+    Description = "The git ref representing the current state. Defaults to HEAD.",
+    DefaultValueFactory = _ => "HEAD"
+};
 
 var diffCommand = new Command(
     "diff",
@@ -325,13 +331,13 @@ var diffCommand = new Command(
     diffFilterOption
 };
 
-diffCommand.SetHandler(async (
-    string?      input,
-    string       baseRef,
-    string       headRef,
-    OutputFormat output,
-    string[]     filters) =>
+diffCommand.SetAction(async (parseResult, _) =>
 {
+    string?      input   = parseResult.GetValue(diffInputOption);
+    string       baseRef = parseResult.GetValue(diffBaseRefOption)!;
+    string       headRef = parseResult.GetValue(diffHeadRefOption)!;
+    OutputFormat output  = parseResult.GetValue(diffOutputOption);
+    string[]     filters = parseResult.GetValue(diffFilterOption) ?? [];
     var parser    = new CsprojParser();
     var graphSvc  = new DependencyGraphService();
     var gitSvc    = new GitService(parser);
@@ -406,12 +412,11 @@ diffCommand.SetHandler(async (
 
     Console.WriteLine(formatted);
     await Task.CompletedTask;
-},
-diffInputOption, diffBaseRefOption, diffHeadRefOption, diffOutputOption, diffFilterOption);
+});
 
-rootCommand.AddCommand(readCommand);
-rootCommand.AddCommand(checkCommand);
-rootCommand.AddCommand(diffCommand);
+rootCommand.Subcommands.Add(readCommand);
+rootCommand.Subcommands.Add(checkCommand);
+rootCommand.Subcommands.Add(diffCommand);
 
 // ---------------------------------------------------------------------------
 // Default-subcommand injection
@@ -444,5 +449,5 @@ if (!isRootFlag && !isSubCmd)
     effectiveArgs = ["read", .. args];
 }
 
-return await rootCommand.InvokeAsync(effectiveArgs);
+return await rootCommand.Parse(effectiveArgs).InvokeAsync();
 

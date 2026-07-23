@@ -141,14 +141,13 @@ public sealed class CsprojLocatorTests
     // -------------------------------------------------------------------------
 
     [TestMethod]
-    [ExpectedException(typeof(ArgumentException))]
     public void Locate_UnsupportedFileExtension_ThrowsArgumentException()
     {
         var txt = Path.Combine(Path.GetTempPath(), "file.txt");
         File.WriteAllText(txt, "content");
         try
         {
-            _locator.Locate(txt);
+            Assert.ThrowsExactly<ArgumentException>(() => _locator.Locate(txt));
         }
         finally
         {
@@ -157,10 +156,9 @@ public sealed class CsprojLocatorTests
     }
 
     [TestMethod]
-    [ExpectedException(typeof(ArgumentException))]
     public void Locate_NonExistentPath_ThrowsArgumentException()
     {
-        _locator.Locate(Path.Combine(Path.GetTempPath(), "does_not_exist_99999"));
+        Assert.ThrowsExactly<ArgumentException>(() => _locator.Locate(Path.Combine(Path.GetTempPath(), "does_not_exist_99999")));
     }
 }
 

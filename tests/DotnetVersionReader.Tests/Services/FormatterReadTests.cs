@@ -223,7 +223,7 @@ public sealed class FormatterReadTests
             MakeInfo("Alpha", "1.0.0"),
             MakeInfo("Beta",  "2.0.0")
         };
-        var ex = Assert.ThrowsException<InvalidOperationException>(
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
         StringAssert.Contains(ex.Message, "Alpha");
@@ -240,7 +240,7 @@ public sealed class FormatterReadTests
             MakeInfo("B", "2.0.0"),
             MakeInfo("C", "3.0.0")
         };
-        var ex = Assert.ThrowsException<InvalidOperationException>(
+        var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
         StringAssert.Contains(ex.Message, "3");

@@ -76,24 +76,21 @@ public sealed class FilterParserTests
     // -------------------------------------------------------------------------
 
     [TestMethod]
-    [ExpectedException(typeof(ArgumentException))]
     public void Parse_FilterWithNoEquals_ThrowsArgumentException()
     {
-        _parser.Parse(["InvalidFilter"]);
+        Assert.ThrowsExactly<ArgumentException>(() => _parser.Parse(["InvalidFilter"]));
     }
 
     [TestMethod]
-    [ExpectedException(typeof(ArgumentException))]
     public void Parse_FilterWithEqualsAtStart_ThrowsArgumentException()
     {
-        _parser.Parse(["=value"]);
+        Assert.ThrowsExactly<ArgumentException>(() => _parser.Parse(["=value"]));
     }
 
     [TestMethod]
-    [ExpectedException(typeof(ArgumentException))]
     public void Parse_InvalidRegexValue_ThrowsArgumentException()
     {
-        _parser.Parse(["MyProp=["]);   // unclosed character class
+        Assert.ThrowsExactly<ArgumentException>(() => _parser.Parse(["MyProp=["]));   // unclosed character class
     }
 }
 

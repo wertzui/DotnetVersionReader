@@ -185,7 +185,7 @@ public sealed class FormatterCheckTests
             new() { Name = "B", FilePath = "B.csproj", HeadVersion = "2.0.0", BaseVersion = "1.0.0", Status = CheckResultStatus.Ok }
         };
 
-        Assert.ThrowsException<InvalidOperationException>(
+        Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(results, OutputFormat.Version, Formatter.CheckOptions));
     }
 
@@ -204,7 +204,7 @@ public sealed class FormatterCheckTests
             }
         };
 
-        Assert.ThrowsException<InvalidOperationException>(
+        Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(results, OutputFormat.Version, Formatter.CheckOptions));
     }
 
