@@ -1,3 +1,5 @@
+using System.Text;
+using System.Xml;
 using System.Xml.Linq;
 
 namespace DotnetVersion.Services;
@@ -53,12 +55,31 @@ public sealed class CsprojVersionWriter
 
         try
         {
-            doc.Save(csprojPath);
+            Save(doc, csprojPath);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new InvalidOperationException($"Could not save '{csprojPath}': {ex.Message}", ex);
         }
+    }
+
+    /// <summary>
+    /// Saves <paramref name="doc"/> to <paramref name="path"/> without introducing an
+    /// <c>&lt;?xml version="1.0" encoding="utf-8"?&gt;</c> declaration when the original file
+    /// did not have one. <see cref="XDocument.Save(string)"/> always writes a declaration
+    /// regardless of <see cref="XDocument.Declaration"/>, so an explicit <see cref="XmlWriter"/>
+    /// with <see cref="XmlWriterSettings.OmitXmlDeclaration"/> is used instead.
+    /// </summary>
+    private static void Save(XDocument doc, string path)
+    {
+        var settings = new XmlWriterSettings
+        {
+            OmitXmlDeclaration = doc.Declaration is null,
+            Encoding = new UTF8Encoding(encoderShouldEmitUTF8Identifier: false),
+        };
+
+        using var writer = XmlWriter.Create(path, settings);
+        doc.Save(writer);
     }
 
     // -------------------------------------------------------------------------

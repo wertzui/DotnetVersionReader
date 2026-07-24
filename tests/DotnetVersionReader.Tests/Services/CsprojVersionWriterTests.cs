@@ -162,6 +162,39 @@ public sealed class CsprojVersionWriterTests
     }
 
     // -------------------------------------------------------------------------
+    // XML declaration must not be introduced (SDK-style .csproj files conventionally
+    // have no <?xml ...?> prolog, and adding one is an unwanted diff/behavior change).
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void ApplyVersion_FileWithoutXmlDeclaration_DoesNotAddOne()
+    {
+        var path = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "MyLib");
+        var before = File.ReadAllText(path);
+        Assert.IsFalse(before.TrimStart().StartsWith("<?xml"), "Fixture must not start with an XML declaration.");
+
+        _writer.ApplyVersion(path, "4.0.0", "");
+
+        var after = File.ReadAllText(path);
+        Assert.IsFalse(after.TrimStart().StartsWith("<?xml"),
+            "ApplyVersion must not insert an XML declaration that was not present in the original file.");
+    }
+
+    [TestMethod]
+    public void ApplyVersion_FileWithXmlDeclaration_PreservesIt()
+    {
+        var path = _tmp.CreateCsproj(
+            $"""<?xml version="1.0" encoding="utf-8"?>{Environment.NewLine}{CsprojFixtures.WithVersionOnly}""",
+            "MyLib");
+
+        _writer.ApplyVersion(path, "4.0.0", "");
+
+        var after = File.ReadAllText(path);
+        Assert.IsTrue(after.TrimStart().StartsWith("<?xml"),
+            "ApplyVersion must preserve an XML declaration that was present in the original file.");
+    }
+
+    // -------------------------------------------------------------------------
     // Error handling
     // -------------------------------------------------------------------------
 
