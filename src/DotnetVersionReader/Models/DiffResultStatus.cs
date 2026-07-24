@@ -13,5 +13,13 @@ public enum DiffResultStatus
     /// <summary>
     /// The project did not exist on the base branch (it is brand-new).
     /// </summary>
-    NewProject
+    NewProject,
+
+    /// <summary>
+    /// The project's own version did not change, but at least one of its
+    /// &lt;PackageReference&gt; or &lt;ProjectReference&gt; entries did — a version bump may be
+    /// warranted. See <see cref="DiffResult.SuggestedVersionPrefix"/> and
+    /// <see cref="DiffResult.SuggestedVersionSuffix"/> for the suggested new version.
+    /// </summary>
+    DependenciesChanged
 }

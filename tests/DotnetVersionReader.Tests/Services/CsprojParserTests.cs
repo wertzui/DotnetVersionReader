@@ -231,5 +231,144 @@ public sealed class CsprojParserTests
         Assert.IsNotNull(result);
         Assert.AreEqual("3.2.1", result.ResolvedVersion);
     }
+
+    // -------------------------------------------------------------------------
+    // PackageReference parsing
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Parse_WithInlinePackageReferenceVersion_ResolvesFromAttribute()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithPackageReference("Newtonsoft.Json", "13.0.1"));
+
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(1, result.PackageReferences.Count);
+        Assert.AreEqual("Newtonsoft.Json", result.PackageReferences[0].Name);
+        Assert.AreEqual("13.0.1",          result.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void Parse_PackageReferenceWithNoInlineVersion_ResolvesFromDirectoryPackagesProps()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        _tmp.CreateFile(dir, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("Newtonsoft.Json", "13.0.2")]));
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithCentrallyManagedPackageReference("Newtonsoft.Json"));
+
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(1, result.PackageReferences.Count);
+        Assert.AreEqual("13.0.2", result.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void Parse_PackageReferenceWithNoInlineVersionAndNoPropsFile_ResolvesToNull()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithCentrallyManagedPackageReference("SomePkg"));
+
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.IsNull(result.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void Parse_PackageReferenceInParentDirectoryPropsFile_IsResolvedByWalkingUp()
+    {
+        var (root, _) = _tmp.CreateDirectory([]);
+        _tmp.CreateFile(root, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("PkgX", "5.0.0")]));
+
+        var projectDir = Path.Combine(root, "src", "MyApp");
+        Directory.CreateDirectory(projectDir);
+        var path = Path.Combine(projectDir, "MyApp.csproj");
+        File.WriteAllText(path, CsprojFixtures.WithCentrallyManagedPackageReference("PkgX"));
+
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual("5.0.0", result.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void Parse_InlineVersionTakesPrecedenceOverCentrallyManagedVersion()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        _tmp.CreateFile(dir, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("Pkg", "1.0.0")]));
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithPackageReference("Pkg", "9.9.9"));
+
+        var result = _parser.Parse(path);
+
+        Assert.AreEqual("9.9.9", result!.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void Parse_MultiplePackageReferences_AllParsed()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithDependencies("1.0.0",
+                packages: [("PkgA", "1.0.0"), ("PkgB", "2.0.0")],
+                projectRefs: []));
+
+        var result = _parser.Parse(path);
+
+        Assert.AreEqual(2, result!.PackageReferences.Count);
+    }
+
+    // -------------------------------------------------------------------------
+    // ProjectReference parsing
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Parse_ProjectReference_ExtractsProjectNameFromIncludePath()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithProjectReference("../MyLib/MyLib.csproj"));
+
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(1, result.ProjectReferences.Count);
+        Assert.AreEqual("MyLib", result.ProjectReferences[0]);
+    }
+
+    [TestMethod]
+    public void Parse_MultipleProjectReferences_AllParsed()
+    {
+        var (dir, _) = _tmp.CreateDirectory([]);
+        var path = _tmp.CreateFile(dir, "MyApp.csproj",
+            CsprojFixtures.WithDependencies("1.0.0",
+                packages: [],
+                projectRefs: ["../Lib1/Lib1.csproj", "../Lib2/Lib2.csproj"]));
+
+        var result = _parser.Parse(path);
+
+        Assert.AreEqual(2, result!.ProjectReferences.Count);
+        Assert.IsTrue(result.ProjectReferences.Contains("Lib1"));
+        Assert.IsTrue(result.ProjectReferences.Contains("Lib2"));
+    }
+
+    [TestMethod]
+    public void Parse_NoPackageOrProjectReferences_ReturnsEmptyLists()
+    {
+        var path   = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly);
+        var result = _parser.Parse(path);
+
+        Assert.IsNotNull(result);
+        Assert.AreEqual(0, result.PackageReferences.Count);
+        Assert.AreEqual(0, result.ProjectReferences.Count);
+    }
 }
 

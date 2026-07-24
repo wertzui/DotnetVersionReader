@@ -320,6 +320,12 @@ var diffHeadRefOption = new Option<string>("--head")
     DefaultValueFactory = _ => "HEAD"
 };
 
+var diffBumpOption = new Option<bool>("--bump", "--fix")
+{
+    Description = "Automatically write the suggested version into each affected .csproj file " +
+                   "(only for projects with status DependenciesChanged). Defaults to false."
+};
+
 var diffCommand = new Command(
     "diff",
     "Shows projects whose version has changed (or that are new) relative to --base. Does not exit with a non-zero code based on results.")
@@ -328,7 +334,8 @@ var diffCommand = new Command(
     diffBaseRefOption,
     diffHeadRefOption,
     diffOutputOption,
-    diffFilterOption
+    diffFilterOption,
+    diffBumpOption
 };
 
 diffCommand.SetAction(async (parseResult, _) =>
@@ -338,11 +345,13 @@ diffCommand.SetAction(async (parseResult, _) =>
     string       headRef = parseResult.GetValue(diffHeadRefOption)!;
     OutputFormat output  = parseResult.GetValue(diffOutputOption);
     string[]     filters = parseResult.GetValue(diffFilterOption) ?? [];
+    bool         bump    = parseResult.GetValue(diffBumpOption);
     var parser    = new CsprojParser();
     var graphSvc  = new DependencyGraphService();
     var gitSvc    = new GitService(parser);
     var diffSvc   = new DiffService();
     var formatter = new Formatter();
+    var writer    = new CsprojVersionWriter();
 
     // 1. Locate and filter .csproj files
     var parsedFilters = ParseFilters(filters);
@@ -380,24 +389,46 @@ diffCommand.SetAction(async (parseResult, _) =>
     var affectedProjects = graphSvc.GetAffectedProjects(changedFiles, graph);
 
     // 5. Parse head info for all affected projects once; build name-keyed lookups
-    var headInfoByName = new Dictionary<string, (string FilePath, string HeadVersion)>(StringComparer.OrdinalIgnoreCase);
+    var headInfoByName = new Dictionary<string, (string FilePath, ProjectVersionInfo Info)>(StringComparer.OrdinalIgnoreCase);
     foreach (var node in affectedProjects)
     {
         var headInfo = parser.Parse(node.CsprojPath);
         if (headInfo is null)
             continue;
-        headInfoByName[headInfo.Name] = (node.CsprojPath, headInfo.ResolvedVersion);
+        headInfoByName[headInfo.Name] = (node.CsprojPath, headInfo);
     }
 
-    // 6. For each parsed project compare head vs base version; keep only those that changed
+    // 6. For each parsed project compare head vs base info (version + dependencies);
+    //    keep only those that changed, suggesting a new version where warranted.
     var results = diffSvc.BuildResults(
         affectedProjects: headInfoByName.Select(kvp => (kvp.Key, kvp.Value.FilePath)),
-        getHeadVersion:   name => headInfoByName.TryGetValue(name, out var h) ? h.HeadVersion : null,
-        getBaseVersion:   name => headInfoByName.TryGetValue(name, out var h)
-                                      ? gitSvc.GetVersionAtRef(baseRef, h.FilePath, repoRoot)
+        getHeadInfo:      name => headInfoByName.TryGetValue(name, out var h) ? h.Info : null,
+        getBaseInfo:      name => headInfoByName.TryGetValue(name, out var h)
+                                      ? gitSvc.GetProjectInfoAtRef(baseRef, h.FilePath, repoRoot)
                                       : null);
 
-    // 6. Format and print
+    // 7. With --bump/--fix, write the suggested version into each affected .csproj file.
+    if (bump)
+    {
+        foreach (var r in results)
+        {
+            if (r.Status != DiffResultStatus.DependenciesChanged || r.SuggestedVersionPrefix is null)
+                continue;
+
+            try
+            {
+                writer.ApplyVersion(r.FilePath, r.SuggestedVersionPrefix, r.SuggestedVersionSuffix ?? string.Empty);
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.Error.WriteLine($"Error: {ex.Message}");
+                Environment.Exit(2);
+                return;
+            }
+        }
+    }
+
+    // 8. Format and print
     string formatted;
     try
     {

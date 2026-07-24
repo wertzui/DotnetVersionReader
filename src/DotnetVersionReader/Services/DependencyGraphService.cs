@@ -34,6 +34,15 @@ public sealed class DependencyGraphService
         /// via <c>&lt;ProjectReference&gt;</c> elements.
         /// </summary>
         public IReadOnlyList<string> DirectProjectReferences { get; internal set; } = [];
+
+        /// <summary>
+        /// Absolute path to the nearest <c>Directory.Packages.props</c> file that applies to this
+        /// project (found by walking up from <see cref="ProjectDirectory"/>), or
+        /// <see langword="null"/> if none exists. A change to this file affects the project even
+        /// though the file itself does not live under <see cref="ProjectDirectory"/> — NuGet
+        /// Central Package Management (CPM) resolves package versions from it.
+        /// </summary>
+        public string? DirectoryPackagesPropsPath { get; internal set; }
     }
 
     /// <summary>
@@ -189,11 +198,22 @@ public sealed class DependencyGraphService
             refs = [];
         }
 
+        string? propsPath;
+        try
+        {
+            propsPath = DirectoryPackagesPropsResolver.FindFile(dir);
+        }
+        catch
+        {
+            propsPath = null;
+        }
+
         return new ProjectNode
         {
-            CsprojPath         = csprojPath,
-            ProjectDirectory   = dir,
-            DirectProjectReferences = refs
+            CsprojPath                 = csprojPath,
+            ProjectDirectory           = dir,
+            DirectProjectReferences    = refs,
+            DirectoryPackagesPropsPath = propsPath is null ? null : NormalizePath(propsPath)
         };
     }
 
@@ -249,6 +269,12 @@ public sealed class DependencyGraphService
     {
         // The .csproj itself changed
         if (changedSet.Contains(node.CsprojPath))
+            return true;
+
+        // The Directory.Packages.props file that applies to this project changed (NuGet CPM).
+        // This file typically lives in an ancestor directory, not under ProjectDirectory, so it
+        // must be checked explicitly rather than relying on the "under directory" scan below.
+        if (node.DirectoryPackagesPropsPath is not null && changedSet.Contains(node.DirectoryPackagesPropsPath))
             return true;
 
         // Any changed file lives under this project's directory (but not in bin/ or obj/)

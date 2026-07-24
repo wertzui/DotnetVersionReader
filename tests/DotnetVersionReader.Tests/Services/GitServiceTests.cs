@@ -223,6 +223,111 @@ public sealed class GitServiceTests
     }
 
     // -------------------------------------------------------------------------
+    // GetProjectInfoAtRef
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void GetProjectInfoAtRef_FileExistsOnRef_ReturnsParsedInfoWithDependencies()
+    {
+        var content = CsprojFixtures.WithPackageReference("Newtonsoft.Json", "13.0.1", "1.0.0");
+        var repo    = CreateInitializedRepo([("MyLib/MyLib.csproj", content)]);
+        var csprojPath = Path.Combine(repo, "MyLib", "MyLib.csproj");
+
+        var info = _svc.GetProjectInfoAtRef("main", csprojPath, repo);
+
+        Assert.IsNotNull(info);
+        Assert.AreEqual("1.0.0", info.ResolvedVersion);
+        Assert.AreEqual(1, info.PackageReferences.Count);
+        Assert.AreEqual("Newtonsoft.Json", info.PackageReferences[0].Name);
+        Assert.AreEqual("13.0.1", info.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void GetProjectInfoAtRef_FileNotOnRef_ReturnsNull()
+    {
+        var repo = CreateInitializedRepo([("README.md", "hi")]);
+
+        RunGit(["checkout", "-b", "feature"], repo);
+        var csprojPath = Path.Combine(repo, "NewProject", "NewProject.csproj");
+        Directory.CreateDirectory(Path.GetDirectoryName(csprojPath)!);
+        File.WriteAllText(csprojPath, CsprojFixtures.Library("1.0.0"));
+        RunGit(["add", "."], repo);
+        RunGit(["commit", "-m", "add new project"], repo);
+
+        var info = _svc.GetProjectInfoAtRef("main", csprojPath, repo);
+
+        Assert.IsNull(info);
+    }
+
+    [TestMethod]
+    public void GetProjectInfoAtRef_CentrallyManagedPackage_ResolvesVersionFromPropsFileAtSameRef()
+    {
+        var propsContent   = CsprojFixtures.DirectoryPackagesProps([("Newtonsoft.Json", "13.0.1")]);
+        var csprojContent  = CsprojFixtures.WithCentrallyManagedPackageReference("Newtonsoft.Json", "1.0.0");
+
+        var repo = CreateInitializedRepo(
+        [
+            ("Directory.Packages.props", propsContent),
+            ("src/MyLib/MyLib.csproj",    csprojContent)
+        ]);
+        var csprojPath = Path.Combine(repo, "src", "MyLib", "MyLib.csproj");
+
+        var info = _svc.GetProjectInfoAtRef("main", csprojPath, repo);
+
+        Assert.IsNotNull(info);
+        Assert.AreEqual("13.0.1", info.PackageReferences[0].Version);
+    }
+
+    [TestMethod]
+    public void GetProjectInfoAtRef_CentrallyManagedPackage_UsesPropsFileVersionAtThatRef_NotWorkingTree()
+    {
+        // The Directory.Packages.props version on 'main' differs from the working tree,
+        // proving that resolution happens against the *ref*, not the current disk state.
+        var repo = CreateInitializedRepo(
+        [
+            ("Directory.Packages.props", CsprojFixtures.DirectoryPackagesProps([("Pkg", "1.0.0")])),
+            ("src/MyLib/MyLib.csproj",    CsprojFixtures.WithCentrallyManagedPackageReference("Pkg", "1.0.0"))
+        ]);
+
+        // Mutate the working tree (uncommitted) to a different central version
+        var propsPath = Path.Combine(repo, "Directory.Packages.props");
+        File.WriteAllText(propsPath, CsprojFixtures.DirectoryPackagesProps([("Pkg", "2.0.0")]));
+
+        var csprojPath = Path.Combine(repo, "src", "MyLib", "MyLib.csproj");
+        var info = _svc.GetProjectInfoAtRef("main", csprojPath, repo);
+
+        Assert.AreEqual("1.0.0", info!.PackageReferences[0].Version,
+            "Resolution must use the props file content as it existed at the given ref.");
+    }
+
+    // -------------------------------------------------------------------------
+    // GetFileContentAtRef
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void GetFileContentAtRef_FileExists_ReturnsContent()
+    {
+        var repo = CreateInitializedRepo([("file.txt", "hello world")]);
+        var path = Path.Combine(repo, "file.txt");
+
+        var content = _svc.GetFileContentAtRef("main", path, repo);
+
+        Assert.IsNotNull(content);
+        StringAssert.Contains(content, "hello world");
+    }
+
+    [TestMethod]
+    public void GetFileContentAtRef_FileDoesNotExist_ReturnsNull()
+    {
+        var repo = CreateInitializedRepo([("file.txt", "hello")]);
+        var path = Path.Combine(repo, "missing.txt");
+
+        var content = _svc.GetFileContentAtRef("main", path, repo);
+
+        Assert.IsNull(content);
+    }
+
+    // -------------------------------------------------------------------------
     // Helpers
     // -------------------------------------------------------------------------
 

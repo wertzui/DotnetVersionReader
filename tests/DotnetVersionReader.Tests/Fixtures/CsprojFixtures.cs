@@ -118,5 +118,64 @@ public static class CsprojFixtures
           </PropertyGroup>
         </Project>
         """;
+
+    // -------------------------------------------------------------------------
+    // Fixtures for PackageReference / ProjectReference / CPM (Directory.Packages.props)
+    // -------------------------------------------------------------------------
+
+    /// <summary>A project with a single &lt;PackageReference&gt; whose version is declared inline.</summary>
+    public static string WithPackageReference(string packageId, string packageVersion, string projectVersion = "1.0.0") => $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <Version>{projectVersion}</Version>
+          </PropertyGroup>
+          <ItemGroup>
+            <PackageReference Include="{packageId}" Version="{packageVersion}" />
+          </ItemGroup>
+        </Project>
+        """;
+
+    /// <summary>A project with a single &lt;PackageReference&gt; that has no version attribute (relies on CPM).</summary>
+    public static string WithCentrallyManagedPackageReference(string packageId, string projectVersion = "1.0.0") => $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <Version>{projectVersion}</Version>
+          </PropertyGroup>
+          <ItemGroup>
+            <PackageReference Include="{packageId}" />
+          </ItemGroup>
+        </Project>
+        """;
+
+    /// <summary>A project with multiple &lt;PackageReference&gt; and &lt;ProjectReference&gt; entries.</summary>
+    public static string WithDependencies(
+        string projectVersion,
+        IEnumerable<(string Id, string? Version)> packages,
+        IEnumerable<string> projectRefs) => $"""
+        <Project Sdk="Microsoft.NET.Sdk">
+          <PropertyGroup>
+            <Version>{projectVersion}</Version>
+          </PropertyGroup>
+          <ItemGroup>
+        {string.Join(Environment.NewLine, packages.Select(p =>
+            p.Version is null
+                ? $"    <PackageReference Include=\"{p.Id}\" />"
+                : $"    <PackageReference Include=\"{p.Id}\" Version=\"{p.Version}\" />"))}
+        {string.Join(Environment.NewLine, projectRefs.Select(r => $"    <ProjectReference Include=\"{r.Replace('\\', '/')}\" />"))}
+          </ItemGroup>
+        </Project>
+        """;
+
+    /// <summary>A minimal <c>Directory.Packages.props</c> content declaring the given package versions.</summary>
+    public static string DirectoryPackagesProps(IEnumerable<(string Id, string Version)> packages) => $"""
+        <Project>
+          <PropertyGroup>
+            <ManagePackageVersionsCentrally>true</ManagePackageVersionsCentrally>
+          </PropertyGroup>
+          <ItemGroup>
+        {string.Join(Environment.NewLine, packages.Select(p => $"    <PackageVersion Include=\"{p.Id}\" Version=\"{p.Version}\" />"))}
+          </ItemGroup>
+        </Project>
+        """;
 }
 

@@ -73,11 +73,22 @@ public sealed class Formatter
             r.FilePath,
             r.HeadVersion,
             r.BaseVersion,
-            Status = r.Status.ToString()
+            Status = r.Status.ToString(),
+            DependencyChanges = r.DependencyChanges.Select(c => new
+            {
+                Kind = c.Kind.ToString(),
+                c.Name,
+                c.BaseVersion,
+                c.HeadVersion,
+                BumpType = c.BumpType.ToString()
+            }),
+            r.SuggestedVersionPrefix,
+            r.SuggestedVersionSuffix,
+            r.SuggestedVersion
         },
-        TableColumns: ["Name", "HeadVersion", "BaseVersion", "Status"],
-        ToTableRow: r => [r.Name, r.HeadVersion, r.BaseVersion ?? "(new)", r.Status.ToString()],
-        GetVersion: r => r.HeadVersion,
+        TableColumns: ["Name", "HeadVersion", "BaseVersion", "Status", "SuggestedVersion"],
+        ToTableRow: r => [r.Name, r.HeadVersion, r.BaseVersion ?? "(new)", r.Status.ToString(), r.SuggestedVersion ?? ""],
+        GetVersion: r => r.SuggestedVersion ?? r.HeadVersion,
         GetName: r => r.Name);
 
     /// <summary>Options for formatting <see cref="CheckResult"/> results (the <c>check</c> command).</summary>

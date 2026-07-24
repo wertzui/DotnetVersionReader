@@ -217,4 +217,100 @@ public sealed class DependencyGraphServiceTests
 
         Assert.AreEqual(3, affected.Count, "All three projects should be affected");
     }
+
+    // -------------------------------------------------------------------------
+    // Directory.Packages.props (NuGet CPM) — changing it affects every consuming project,
+    // even though the file lives in a parent directory, not under any project's own directory.
+    // -------------------------------------------------------------------------
+
+    [TestMethod]
+    public void Build_DirectoryPackagesPropsInAncestor_IsDiscoveredOnNode()
+    {
+        var (root, projects) = _tmp.CreateProjectTree([("Lib", CsprojFixtures.Library())]);
+        var propsPath = _tmp.CreateFile(root, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("PkgA", "1.0.0")]));
+
+        var graph = _svc.Build([projects["Lib"].CsprojPath]);
+        var node  = graph.Nodes.Values.Single();
+
+        Assert.AreEqual(
+            DependencyGraphService.NormalizePath(propsPath),
+            node.DirectoryPackagesPropsPath);
+    }
+
+    [TestMethod]
+    public void Build_NoDirectoryPackagesProps_NodeHasNullPath()
+    {
+        var (_, projects) = _tmp.CreateProjectTree([("Lib", CsprojFixtures.Library())]);
+
+        var graph = _svc.Build([projects["Lib"].CsprojPath]);
+        var node  = graph.Nodes.Values.Single();
+
+        Assert.IsNull(node.DirectoryPackagesPropsPath);
+    }
+
+    [TestMethod]
+    public void GetAffectedProjects_DirectoryPackagesPropsChanged_MarksAllConsumingProjectsAffected()
+    {
+        // Reproduces the reported bug: a change to Directory.Packages.props (which lives in a
+        // parent directory shared by multiple projects, as with NuGet CPM) must mark every
+        // project that resolves package versions from it as affected — even though the props
+        // file itself is not "owned" by any single project's directory.
+        var (root, projects) = _tmp.CreateProjectTree([
+            ("Lib1", CsprojFixtures.WithCentrallyManagedPackageReference("PkgA")),
+            ("Lib2", CsprojFixtures.WithCentrallyManagedPackageReference("PkgA"))
+        ]);
+        var propsPath = _tmp.CreateFile(root, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("PkgA", "1.0.0")]));
+
+        var graph = _svc.Build([projects["Lib1"].CsprojPath, projects["Lib2"].CsprojPath]);
+
+        var affected = _svc.GetAffectedProjects([propsPath], graph);
+
+        Assert.AreEqual(2, affected.Count,
+            "Both projects sharing the Directory.Packages.props file must be reported as affected.");
+    }
+
+    [TestMethod]
+    public void GetAffectedProjects_DirectoryPackagesPropsChanged_BubblesUpToTransitiveConsumer()
+    {
+        var (root, projects) = _tmp.CreateProjectTree([
+            ("Core", CsprojFixtures.WithCentrallyManagedPackageReference("PkgA")),
+            ("App",  CsprojFixtures.Library())
+        ]);
+        var propsPath = _tmp.CreateFile(root, "Directory.Packages.props",
+            CsprojFixtures.DirectoryPackagesProps([("PkgA", "1.0.0")]));
+
+        var appCsproj  = projects["App"].CsprojPath;
+        var coreCsproj = projects["Core"].CsprojPath;
+        File.WriteAllText(appCsproj, CsprojFixtures.WithProjectReference(coreCsproj));
+
+        var graph = _svc.Build([appCsproj, coreCsproj]);
+
+        var affected = _svc.GetAffectedProjects([propsPath], graph);
+
+        Assert.AreEqual(2, affected.Count,
+            "The props change should bubble up from Core to its consumer App as well.");
+    }
+
+    [TestMethod]
+    public void GetAffectedProjects_UnrelatedPropsFileChanged_DoesNotAffectOtherProjectsPropsFile()
+    {
+        // Two independent project trees, each with its own Directory.Packages.props.
+        // Changing one must not affect projects that resolve from the other.
+        var (root1, projects1) = _tmp.CreateProjectTree([("Lib1", CsprojFixtures.WithCentrallyManagedPackageReference("PkgA"))]);
+        var (root2, projects2) = _tmp.CreateProjectTree([("Lib2", CsprojFixtures.WithCentrallyManagedPackageReference("PkgA"))]);
+
+        _tmp.CreateFile(root1, "Directory.Packages.props", CsprojFixtures.DirectoryPackagesProps([("PkgA", "1.0.0")]));
+        var props2Path = _tmp.CreateFile(root2, "Directory.Packages.props", CsprojFixtures.DirectoryPackagesProps([("PkgA", "1.0.0")]));
+
+        var graph = _svc.Build([projects1["Lib1"].CsprojPath, projects2["Lib2"].CsprojPath]);
+
+        var affected = _svc.GetAffectedProjects([props2Path], graph);
+
+        Assert.AreEqual(1, affected.Count);
+        Assert.AreEqual(
+            DependencyGraphService.NormalizePath(projects2["Lib2"].CsprojPath),
+            affected[0].CsprojPath);
+    }
 }

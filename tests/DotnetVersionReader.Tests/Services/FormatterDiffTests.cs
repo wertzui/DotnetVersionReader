@@ -87,6 +87,65 @@ public sealed class FormatterDiffTests
         Assert.AreEqual(2, array.Length);
     }
 
+    [TestMethod]
+    public void Format_Json_DependenciesChanged_SerializesSuggestionAndChanges()
+    {
+        var results = new List<DiffResult>
+        {
+            new()
+            {
+                Name                   = "MyApp",
+                FilePath               = "/src/MyApp/MyApp.csproj",
+                HeadVersion            = "1.2.3",
+                BaseVersion            = "1.2.3",
+                Status                 = DiffResultStatus.DependenciesChanged,
+                SuggestedVersionPrefix = "1.2.4",
+                SuggestedVersionSuffix = "",
+                DependencyChanges =
+                [
+                    new DependencyChange
+                    {
+                        Kind        = DependencyKind.Package,
+                        Name        = "Newtonsoft.Json",
+                        BaseVersion = "13.0.1",
+                        HeadVersion = "13.0.2",
+                        BumpType    = SemVerBumpType.Patch
+                    }
+                ]
+            }
+        };
+
+        var json  = _formatter.Format(results, OutputFormat.Json, Formatter.DiffOptions);
+        var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
+
+        Assert.AreEqual("DependenciesChanged", array[0].GetProperty("Status").GetString());
+        Assert.AreEqual("1.2.4",               array[0].GetProperty("SuggestedVersionPrefix").GetString());
+        Assert.AreEqual("",                    array[0].GetProperty("SuggestedVersionSuffix").GetString());
+        Assert.AreEqual("1.2.4",               array[0].GetProperty("SuggestedVersion").GetString());
+
+        var changes = array[0].GetProperty("DependencyChanges");
+        Assert.AreEqual(1, changes.GetArrayLength());
+        Assert.AreEqual("Package",          changes[0].GetProperty("Kind").GetString());
+        Assert.AreEqual("Newtonsoft.Json",   changes[0].GetProperty("Name").GetString());
+        Assert.AreEqual("13.0.1",            changes[0].GetProperty("BaseVersion").GetString());
+        Assert.AreEqual("13.0.2",            changes[0].GetProperty("HeadVersion").GetString());
+        Assert.AreEqual("Patch",             changes[0].GetProperty("BumpType").GetString());
+    }
+
+    [TestMethod]
+    public void Format_Json_BumpedResult_HasNullSuggestedVersion()
+    {
+        var results = new List<DiffResult>
+        {
+            new() { Name = "MyLib", FilePath = "MyLib.csproj", HeadVersion = "2.0.0", BaseVersion = "1.0.0", Status = DiffResultStatus.Bumped }
+        };
+
+        var json  = _formatter.Format(results, OutputFormat.Json, Formatter.DiffOptions);
+        var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
+
+        Assert.AreEqual(JsonValueKind.Null, array[0].GetProperty("SuggestedVersion").ValueKind);
+    }
+
     // -------------------------------------------------------------------------
     // Table output
     // -------------------------------------------------------------------------
@@ -119,6 +178,30 @@ public sealed class FormatterDiffTests
         StringAssert.Contains(table, "HeadVersion");
         StringAssert.Contains(table, "BaseVersion");
         StringAssert.Contains(table, "Status");
+        StringAssert.Contains(table, "SuggestedVersion");
+    }
+
+    [TestMethod]
+    public void Format_Table_DependenciesChanged_ShowsSuggestedVersion()
+    {
+        var results = new List<DiffResult>
+        {
+            new()
+            {
+                Name                   = "MyApp",
+                FilePath               = "MyApp.csproj",
+                HeadVersion            = "1.2.3",
+                BaseVersion            = "1.2.3",
+                Status                 = DiffResultStatus.DependenciesChanged,
+                SuggestedVersionPrefix = "1.3.0",
+                SuggestedVersionSuffix = ""
+            }
+        };
+
+        var table = _formatter.Format(results, OutputFormat.Table, Formatter.DiffOptions);
+
+        StringAssert.Contains(table, "DependenciesChanged");
+        StringAssert.Contains(table, "1.3.0");
     }
 
     [TestMethod]

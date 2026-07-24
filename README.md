@@ -263,15 +263,18 @@ jobs:
 
 ### `dotnet version diff` — show version changes relative to a base branch
 
-Shows all projects whose version has changed (or that are brand-new) compared to a base branch.
+Shows all projects whose version has changed (or that are brand-new) compared to a base branch,
+**or** whose `<PackageReference>`/`<ProjectReference>` entries changed while the project's own
+version stayed the same — in which case a new `<VersionPrefix>`/`<VersionSuffix>` is suggested
+based on semantic versioning.
 Unlike `check`, this command **never exits with a non-zero code based on results** — it is a
 pure informational diff, useful for release notes, changelogs, or scripting.
 
 ```bash
-dotnet version diff [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]...
+dotnet version diff [--base <ref>] [--input <path>] [--head <ref>] [--output <format>] [--filter <XmlNode=Value>]... [--bump]
 
 # Short aliases (--base defaults to origin/main):
-dotnet version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]...
+dotnet version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <XmlNode=Value>]... [--fix]
 ```
 
 #### Options
@@ -283,6 +286,7 @@ dotnet version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <Xml
 | `--head` | | The git ref for the current state. Defaults to `HEAD`. |
 | `--output` | `-o` | Output format: `json` (default), `table`, `list`, or `version` (single project only). |
 | `--filter` | `-f` | Filter in the form `XmlNode=Value`. Only matching projects are considered. Value can be a regex. Repeatable. |
+| `--bump` | `--fix` | Automatically write the suggested version into each affected `.csproj` file (only for projects with status `DependenciesChanged`). Defaults to `false`. |
 
 #### Exit codes
 
@@ -293,9 +297,49 @@ dotnet version diff [-b <ref>] [-i <path>] [--head <ref>] [-o <format>] [-f <Xml
 
 #### How it works
 
-Uses the same git/dependency-graph pipeline as `check` (steps 1–4 are identical), but at step 5
-only keeps projects whose version on `<head>` **differs** from the version on `<base>` (or projects
-that are brand-new). Projects whose version is unchanged are silently omitted.
+Uses the same git/dependency-graph pipeline as `check` (steps 1–4 are identical), with one
+addition: a project is also considered "affected" (step 4) when the nearest
+`Directory.Packages.props` file that applies to it (NuGet Central Package Management, found by
+walking up from the project's directory — it usually lives several levels above, shared by many
+projects) is among the changed files, even though that file is not physically inside the
+project's own directory. This is what makes a **CPM-only** package bump (i.e. only
+`Directory.Packages.props` changed, no `.csproj` touched) show up in `diff` for every project
+that references an affected package — and bubbles up transitively to their consumers too.
+
+At step 5, for each affected project:
+
+1. If the project is brand-new (didn't exist on `<base>`), it is included with status `NewProject`.
+2. Otherwise, its resolved version on `<head>` is compared to `<base>`. If they differ, it is
+   included with status `Bumped`.
+3. Otherwise (the version is unchanged), its `<PackageReference>` and `<ProjectReference>`
+   entries are compared between `<head>` and `<base>`:
+   - A `<PackageReference>` version bump is classified as a **major**, **minor**, or **patch**
+     semantic-versioning change (based on which component of the dependency's version changed).
+     Package versions that are not declared inline are resolved from the nearest
+     `Directory.Packages.props` file (NuGet Central Package Management) — read from the same git
+     ref being compared, so history is respected even if the props file has since changed.
+   - An added `<PackageReference>` or `<ProjectReference>` counts as a **minor** change; a
+     removed one counts as a **major** change.
+   - If any dependency changed, the project is included with status `DependenciesChanged` and
+     `SuggestedVersionPrefix`/`SuggestedVersionSuffix` are computed by bumping the project's
+     current version according to the *most severe* change found (major > minor > patch). The
+     suggested suffix is always empty, since a suggested bump drops any pre-release suffix.
+4. Projects with no version change and no dependency changes are silently omitted.
+
+When `--bump` (alias `--fix`) is passed, every project reported with status `DependenciesChanged`
+has its suggested version written directly into its `.csproj` file before the result is printed:
+
+- If the project already has a `<Version>` element, it is updated in place with the combined
+  `SuggestedVersionPrefix`/`SuggestedVersionSuffix` string.
+- Otherwise `<VersionPrefix>` is created or updated, and `<VersionSuffix>` is created/updated (or
+  removed, since a suggested bump always has an empty suffix) alongside it, in the project's
+  first `<PropertyGroup>` (a new one is created if none exists).
+- Projects with status `Bumped` or `NewProject` are left untouched — the author already handled
+  those (or there is nothing to bump for a brand-new project).
+
+> **Tip:** Run `diff` without `--bump` first to review the suggested versions, then re-run with
+> `--bump` (or `--fix`) once you're happy with them — e.g. as a pre-commit step or a dedicated
+> "auto-bump" CI job that commits the result back to the PR branch.
 
 #### Examples
 
@@ -316,6 +360,10 @@ dotnet version diff --input MySolution.slnx --base origin/main --output list
 
 # Only projects that produce a NuGet package
 dotnet version diff --input MySolution.slnx --base origin/main --filter "GeneratePackageOnBuild=true"
+
+# Automatically apply the suggested version bump to affected .csproj files
+dotnet version diff --input MySolution.slnx --base origin/main --bump
+dotnet version diff --input MySolution.slnx --base origin/main --fix
 ```
 
 #### Sample JSON output
@@ -327,14 +375,41 @@ dotnet version diff --input MySolution.slnx --base origin/main --filter "Generat
     "FilePath": "src/MyLib/MyLib.csproj",
     "HeadVersion": "2.0.0",
     "BaseVersion": "1.0.0",
-    "Status": "Bumped"
+    "Status": "Bumped",
+    "DependencyChanges": [],
+    "SuggestedVersionPrefix": null,
+    "SuggestedVersionSuffix": null,
+    "SuggestedVersion": null
   },
   {
     "Name": "MyNewLib",
     "FilePath": "src/MyNewLib/MyNewLib.csproj",
     "HeadVersion": "1.0.0",
     "BaseVersion": null,
-    "Status": "NewProject"
+    "Status": "NewProject",
+    "DependencyChanges": [],
+    "SuggestedVersionPrefix": null,
+    "SuggestedVersionSuffix": null,
+    "SuggestedVersion": null
+  },
+  {
+    "Name": "MyApp",
+    "FilePath": "src/MyApp/MyApp.csproj",
+    "HeadVersion": "1.2.3",
+    "BaseVersion": "1.2.3",
+    "Status": "DependenciesChanged",
+    "DependencyChanges": [
+      {
+        "Kind": "Package",
+        "Name": "Newtonsoft.Json",
+        "BaseVersion": "13.0.1",
+        "HeadVersion": "13.0.2",
+        "BumpType": "Patch"
+      }
+    ],
+    "SuggestedVersionPrefix": "1.2.4",
+    "SuggestedVersionSuffix": "",
+    "SuggestedVersion": "1.2.4"
   }
 ]
 ```
@@ -343,24 +418,37 @@ Possible `Status` values:
 
 | Value | Meaning |
 | ------- | --------- |
-| `Bumped` | The version was bumped relative to the base branch. |
+| `Bumped` | The project's own version was bumped relative to the base branch. |
 | `NewProject` | The project did not exist on the base branch. |
+| `DependenciesChanged` | The project's own version is unchanged, but a `<PackageReference>` or `<ProjectReference>` changed. See `SuggestedVersionPrefix`/`SuggestedVersionSuffix`/`SuggestedVersion` for the recommended new version. |
+
+Each entry in `DependencyChanges` has a `Kind` (`Package` or `Project`) and a `BumpType`
+(`Major`, `Minor`, or `Patch`) describing the semantic-versioning severity of that single change:
+
+| BumpType | When |
+| ---------- | ------ |
+| `Major` | A dependency was removed, or its major version component changed. |
+| `Minor` | A dependency was added, or its minor version component changed. |
+| `Patch` | A dependency's patch version (or pre-release suffix) changed. |
 
 #### Sample table output
 
 ```
-| Name      | HeadVersion | BaseVersion | Status     |
-|-----------|-------------|-------------|------------|
-| MyLib     | 2.0.0       | 1.0.0       | Bumped     |
-| MyNewLib  | 1.0.0       |             | NewProject |
+| Name  | HeadVersion | BaseVersion | Status              | SuggestedVersion |
+|-------|-------------|-------------|----------------------|------------------|
+| MyLib | 2.0.0       | 1.0.0       | Bumped               |                  |
+| MyApp | 1.2.3       | 1.2.3       | DependenciesChanged  | 1.2.4            |
 ```
 
 #### Sample list output
 
 ```text
 MyLib 2.0.0
-MyNewLib 1.0.0
+MyApp 1.2.4
 ```
+
+> **Note:** In `list` and `version` output, a project with status `DependenciesChanged` shows the
+> *suggested* version rather than its (unchanged) current version.
 
 ---
 

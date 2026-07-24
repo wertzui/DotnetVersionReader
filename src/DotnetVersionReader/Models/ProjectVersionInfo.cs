@@ -21,6 +21,19 @@ public sealed record ProjectVersionInfo
     public string? VersionSuffix { get; init; }
 
     /// <summary>
+    /// The &lt;PackageReference&gt; entries declared in this project, with versions resolved
+    /// from either the inline <c>Version</c> attribute/element or, if absent, from a
+    /// <c>Directory.Packages.props</c> file (NuGet Central Package Management).
+    /// </summary>
+    public IReadOnlyList<PackageReferenceEntry> PackageReferences { get; init; } = [];
+
+    /// <summary>
+    /// The names (filename without extension) of the projects referenced via
+    /// &lt;ProjectReference&gt; elements in this project.
+    /// </summary>
+    public IReadOnlyList<string> ProjectReferences { get; init; } = [];
+
+    /// <summary>
     /// The final resolved version, following MSBuild semantics:
     /// <list type="bullet">
     ///   <item>If &lt;Version&gt; is set it takes precedence.</item>

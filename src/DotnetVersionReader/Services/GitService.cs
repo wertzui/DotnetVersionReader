@@ -129,28 +129,88 @@ public sealed class GitService
         string gitRef,
         string csprojPath,
         string? repositoryRoot = null)
+        => GetProjectInfoAtRef(gitRef, csprojPath, repositoryRoot)?.ResolvedVersion;
+
+    /// <summary>
+    /// Reads and fully parses the project at <paramref name="csprojPath"/> as it exists at
+    /// <paramref name="gitRef"/>, including its &lt;PackageReference&gt; and
+    /// &lt;ProjectReference&gt; entries. When the project does not declare a package version
+    /// inline, the nearest <c>Directory.Packages.props</c> file is also read <em>at the same
+    /// ref</em> (walking up parent directories) so that centrally-managed package versions are
+    /// resolved consistently with how the project actually built at that point in history.
+    /// Returns <see langword="null"/> when the .csproj file does not exist at that ref.
+    /// </summary>
+    /// <param name="gitRef">The git ref to read from (e.g. <c>origin/main</c>).</param>
+    /// <param name="csprojPath">Absolute path to the .csproj file in the working tree.</param>
+    /// <param name="repositoryRoot">
+    /// The repository root directory. If <see langword="null"/>, detected automatically.
+    /// </param>
+    public ProjectVersionInfo? GetProjectInfoAtRef(
+        string gitRef,
+        string csprojPath,
+        string? repositoryRoot = null)
     {
         var workingDir = repositoryRoot ?? Path.GetDirectoryName(csprojPath) ?? Directory.GetCurrentDirectory();
         var repoRoot   = GetRepositoryRoot(workingDir);
 
-        // Convert absolute path to a path relative to the repo root, using forward slashes
-        // (git always uses forward slashes in object paths regardless of OS)
-        var relative = Path.GetRelativePath(repoRoot, csprojPath)
+        var content = GetFileContentAtRef(gitRef, csprojPath, repoRoot);
+        if (content is null)
+            return null;
+
+        var projectDir = Path.GetDirectoryName(csprojPath) ?? repoRoot;
+        var propsContent = FindDirectoryPackagesPropsAtRef(gitRef, projectDir, repoRoot);
+        var centralVersions = propsContent is null
+            ? null
+            : new DirectoryPackagesPropsResolver().ParseContent(propsContent);
+
+        return _parser.ParseFromString(content, csprojPath, centralVersions);
+    }
+
+    /// <summary>
+    /// Reads the content of <paramref name="absolutePath"/> as it exists at
+    /// <paramref name="gitRef"/>. Returns <see langword="null"/> when the file does not exist
+    /// at that ref.
+    /// </summary>
+    public string? GetFileContentAtRef(string gitRef, string absolutePath, string repositoryRoot)
+    {
+        var relative = Path.GetRelativePath(repositoryRoot, absolutePath)
             .Replace('\\', '/');
 
-        string content;
         try
         {
-            content = RunGit(["show", $"{gitRef}:{relative}"], repoRoot);
+            return RunGit(["show", $"{gitRef}:{relative}"], repositoryRoot);
         }
         catch (InvalidOperationException)
         {
             // File does not exist at that ref
             return null;
         }
+    }
 
-        var info = _parser.ParseFromString(content, csprojPath);
-        return info?.ResolvedVersion;
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> to <paramref name="repositoryRoot"/>
+    /// (inclusive), returning the content of the nearest <c>Directory.Packages.props</c> file
+    /// as it exists at <paramref name="gitRef"/>, or <see langword="null"/> if none is found.
+    /// </summary>
+    private string? FindDirectoryPackagesPropsAtRef(string gitRef, string startDirectory, string repositoryRoot)
+    {
+        var normalizedRoot = DependencyGraphService.NormalizePath(repositoryRoot);
+        var dir = new DirectoryInfo(DependencyGraphService.NormalizePath(startDirectory));
+
+        while (dir is not null)
+        {
+            var candidate = Path.Combine(dir.FullName, "Directory.Packages.props");
+            var content = GetFileContentAtRef(gitRef, candidate, repositoryRoot);
+            if (content is not null)
+                return content;
+
+            if (string.Equals(dir.FullName, normalizedRoot, StringComparison.OrdinalIgnoreCase))
+                break;
+
+            dir = dir.Parent;
+        }
+
+        return null;
     }
 
     /// <summary>
