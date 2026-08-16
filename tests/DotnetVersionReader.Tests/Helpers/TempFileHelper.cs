@@ -1,4 +1,4 @@
-namespace DotnetVersion.Tests.Helpers;
+namespace DotnetVersionReader.Tests.Helpers;
 
 /// <summary>
 /// Creates temporary .csproj files on disk and cleans them up after each test.

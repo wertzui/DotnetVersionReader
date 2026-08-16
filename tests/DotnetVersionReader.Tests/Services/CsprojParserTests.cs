@@ -1,11 +1,11 @@
 using System.Text.RegularExpressions;
 using System.Xml.Linq;
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class CsprojParserTests
@@ -246,7 +246,7 @@ public sealed class CsprojParserTests
         var result = _parser.Parse(path);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1, result.PackageReferences.Count);
+        Assert.HasCount(1, result.PackageReferences);
         Assert.AreEqual("Newtonsoft.Json", result.PackageReferences[0].Name);
         Assert.AreEqual("13.0.1",          result.PackageReferences[0].Version);
     }
@@ -263,7 +263,7 @@ public sealed class CsprojParserTests
         var result = _parser.Parse(path);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1, result.PackageReferences.Count);
+        Assert.HasCount(1, result.PackageReferences);
         Assert.AreEqual("13.0.2", result.PackageReferences[0].Version);
     }
 
@@ -323,7 +323,7 @@ public sealed class CsprojParserTests
 
         var result = _parser.Parse(path);
 
-        Assert.AreEqual(2, result!.PackageReferences.Count);
+        Assert.HasCount(2, result!.PackageReferences);
     }
 
     // -------------------------------------------------------------------------
@@ -340,7 +340,7 @@ public sealed class CsprojParserTests
         var result = _parser.Parse(path);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(1, result.ProjectReferences.Count);
+        Assert.HasCount(1, result.ProjectReferences);
         Assert.AreEqual("MyLib", result.ProjectReferences[0]);
     }
 
@@ -355,9 +355,9 @@ public sealed class CsprojParserTests
 
         var result = _parser.Parse(path);
 
-        Assert.AreEqual(2, result!.ProjectReferences.Count);
-        Assert.IsTrue(result.ProjectReferences.Contains("Lib1"));
-        Assert.IsTrue(result.ProjectReferences.Contains("Lib2"));
+        Assert.HasCount(2, result!.ProjectReferences);
+        Assert.Contains("Lib1", result.ProjectReferences);
+        Assert.Contains("Lib2", result.ProjectReferences);
     }
 
     [TestMethod]
@@ -367,8 +367,8 @@ public sealed class CsprojParserTests
         var result = _parser.Parse(path);
 
         Assert.IsNotNull(result);
-        Assert.AreEqual(0, result.PackageReferences.Count);
-        Assert.AreEqual(0, result.ProjectReferences.Count);
+        Assert.IsEmpty(result.PackageReferences);
+        Assert.IsEmpty(result.ProjectReferences);
     }
 }
 

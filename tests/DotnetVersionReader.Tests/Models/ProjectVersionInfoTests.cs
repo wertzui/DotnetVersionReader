@@ -1,7 +1,6 @@
 using DotnetVersion.Models;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Models;
+namespace DotnetVersionReader.Tests.Models;
 
 [TestClass]
 public sealed class ProjectVersionInfoTests
@@ -137,9 +136,9 @@ public sealed class ProjectVersionInfoTests
         string? versionSuffix = null)
         => new()
         {
-            Name          = "TestProject",
-            FilePath      = "TestProject.csproj",
-            Version       = version,
+            Name = "TestProject",
+            FilePath = "TestProject.csproj",
+            Version = version,
             VersionPrefix = versionPrefix,
             VersionSuffix = versionSuffix
         };

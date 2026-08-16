@@ -1,7 +1,7 @@
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class FilterParserTests
@@ -20,7 +20,7 @@ public sealed class FilterParserTests
     {
         var result = _parser.Parse(["GeneratePackageOnBuild=true"]);
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual("GeneratePackageOnBuild", result[0].Element);
         Assert.IsTrue(result[0].Pattern.IsMatch("true"));
     }
@@ -30,7 +30,7 @@ public sealed class FilterParserTests
     {
         var result = _parser.Parse(["TargetFramework=net9.0", "GeneratePackageOnBuild=true"]);
 
-        Assert.AreEqual(2, result.Count);
+        Assert.HasCount(2, result);
     }
 
     [TestMethod]
@@ -38,7 +38,7 @@ public sealed class FilterParserTests
     {
         var result = _parser.Parse(["TargetFramework=^net[0-9]+\\.0$"]);
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.IsTrue(result[0].Pattern.IsMatch("net9.0"));
         Assert.IsFalse(result[0].Pattern.IsMatch("netstandard2.0"));
     }
@@ -47,7 +47,7 @@ public sealed class FilterParserTests
     public void Parse_EmptyCollection_ReturnsEmptyList()
     {
         var result = _parser.Parse([]);
-        Assert.AreEqual(0, result.Count);
+        Assert.IsEmpty(result);
     }
 
     [TestMethod]
@@ -56,7 +56,7 @@ public sealed class FilterParserTests
         // e.g., "MyProp=a=b" – the value part should be "a=b"
         var result = _parser.Parse(["MyProp=a=b"]);
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual("MyProp", result[0].Element);
         Assert.IsTrue(result[0].Pattern.IsMatch("a=b"));
     }

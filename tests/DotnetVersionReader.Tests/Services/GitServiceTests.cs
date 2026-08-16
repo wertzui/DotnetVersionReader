@@ -1,8 +1,7 @@
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using DotnetVersionReader.Tests.Fixtures;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 /// <summary>
 /// Integration tests for <see cref="GitService"/> that spin up a real (temporary) git repository.
@@ -17,8 +16,8 @@ public sealed class GitServiceTests
     [TestInitialize]
     public void Setup()
     {
-        _svc             = new GitService(new CsprojParser());
-        _reposToDelete   = [];
+        _svc = new GitService(new CsprojParser());
+        _reposToDelete = [];
     }
 
     [TestCleanup]
@@ -43,8 +42,8 @@ public sealed class GitServiceTests
     [TestMethod]
     public void GetRepositoryRoot_InsideRepo_ReturnsCorrectRoot()
     {
-        var repo    = CreateInitializedRepo([]);
-        var subDir  = Path.Combine(repo, "src", "Lib");
+        var repo = CreateInitializedRepo([]);
+        var subDir = Path.Combine(repo, "src", "Lib");
         Directory.CreateDirectory(subDir);
 
         var root = _svc.GetRepositoryRoot(subDir);
@@ -72,7 +71,7 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.AreEqual(1, changed.Count);
+        Assert.HasCount(1, changed);
         Assert.IsTrue(changed[0].EndsWith("README.md", StringComparison.OrdinalIgnoreCase));
         Assert.IsTrue(Path.IsPathRooted(changed[0]), "Path should be absolute");
     }
@@ -89,7 +88,7 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.IsTrue(changed.Any(f => f.EndsWith("newfile.txt", StringComparison.OrdinalIgnoreCase)));
+        Assert.Contains(f => f.EndsWith("newfile.txt", StringComparison.OrdinalIgnoreCase), changed);
     }
 
     [TestMethod]
@@ -102,7 +101,7 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.AreEqual(0, changed.Count);
+        Assert.IsEmpty(changed);
     }
 
     // -------------------------------------------------------------------------
@@ -120,8 +119,8 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.IsTrue(
-            changed.Any(f => f.EndsWith("MyLib.cs", StringComparison.OrdinalIgnoreCase)),
+        Assert.Contains(
+            f => f.EndsWith("MyLib.cs", StringComparison.OrdinalIgnoreCase), changed,
             "Unstaged modified file must be reported as changed");
     }
 
@@ -135,8 +134,8 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.IsTrue(
-            changed.Any(f => f.EndsWith("MyLib.cs", StringComparison.OrdinalIgnoreCase)),
+        Assert.Contains(
+            f => f.EndsWith("MyLib.cs", StringComparison.OrdinalIgnoreCase), changed,
             "Staged (but not committed) modified file must be reported as changed");
     }
 
@@ -149,8 +148,8 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.IsTrue(
-            changed.Any(f => f.EndsWith("newfile.txt", StringComparison.OrdinalIgnoreCase)),
+        Assert.Contains(
+            f => f.EndsWith("newfile.txt", StringComparison.OrdinalIgnoreCase), changed,
             "Untracked new file must be reported as changed");
     }
 
@@ -158,7 +157,7 @@ public sealed class GitServiceTests
     public void GetChangedFiles_CsprojVersionBumpedUncommitted_IsIncluded()
     {
         // Simulate the exact user scenario: version bumped in .csproj but not committed
-        var repo       = CreateInitializedRepo([("MyLib/MyLib.csproj", CsprojFixtures.Library("1.0.0"))]);
+        var repo = CreateInitializedRepo([("MyLib/MyLib.csproj", CsprojFixtures.Library("1.0.0"))]);
         var csprojPath = Path.Combine(repo, "MyLib", "MyLib.csproj");
 
         // Bump version locally without committing (mirrors real workflow)
@@ -166,8 +165,8 @@ public sealed class GitServiceTests
 
         var changed = _svc.GetChangedFiles("main", "HEAD", repo);
 
-        Assert.IsTrue(
-            changed.Any(f => string.Equals(f, csprojPath, StringComparison.OrdinalIgnoreCase)),
+        Assert.Contains(
+            f => string.Equals(f, csprojPath, StringComparison.OrdinalIgnoreCase), changed,
             "Uncommitted .csproj version bump must be reported as changed");
     }
 
@@ -179,10 +178,10 @@ public sealed class GitServiceTests
     public void GetVersionAtRef_FileExistsOnRef_ReturnsVersion()
     {
         var csprojContent = CsprojFixtures.Library("2.3.4");
-        var repo          = CreateInitializedRepo([("MyLib/MyLib.csproj", csprojContent)]);
+        var repo = CreateInitializedRepo([("MyLib/MyLib.csproj", csprojContent)]);
 
         var csprojPath = Path.Combine(repo, "MyLib", "MyLib.csproj");
-        var version    = _svc.GetVersionAtRef("main", csprojPath, repo);
+        var version = _svc.GetVersionAtRef("main", csprojPath, repo);
 
         Assert.AreEqual("2.3.4", version);
     }
@@ -208,7 +207,7 @@ public sealed class GitServiceTests
     [TestMethod]
     public void GetVersionAtRef_VersionChangedOnBranch_ReturnsBaseVersion()
     {
-        var repo       = CreateInitializedRepo([("MyLib/MyLib.csproj", CsprojFixtures.Library("1.0.0"))]);
+        var repo = CreateInitializedRepo([("MyLib/MyLib.csproj", CsprojFixtures.Library("1.0.0"))]);
         var csprojPath = Path.Combine(repo, "MyLib", "MyLib.csproj");
 
         RunGit(["checkout", "-b", "feature"], repo);
@@ -230,14 +229,14 @@ public sealed class GitServiceTests
     public void GetProjectInfoAtRef_FileExistsOnRef_ReturnsParsedInfoWithDependencies()
     {
         var content = CsprojFixtures.WithPackageReference("Newtonsoft.Json", "13.0.1", "1.0.0");
-        var repo    = CreateInitializedRepo([("MyLib/MyLib.csproj", content)]);
+        var repo = CreateInitializedRepo([("MyLib/MyLib.csproj", content)]);
         var csprojPath = Path.Combine(repo, "MyLib", "MyLib.csproj");
 
         var info = _svc.GetProjectInfoAtRef("main", csprojPath, repo);
 
         Assert.IsNotNull(info);
         Assert.AreEqual("1.0.0", info.ResolvedVersion);
-        Assert.AreEqual(1, info.PackageReferences.Count);
+        Assert.HasCount(1, info.PackageReferences);
         Assert.AreEqual("Newtonsoft.Json", info.PackageReferences[0].Name);
         Assert.AreEqual("13.0.1", info.PackageReferences[0].Version);
     }
@@ -262,8 +261,8 @@ public sealed class GitServiceTests
     [TestMethod]
     public void GetProjectInfoAtRef_CentrallyManagedPackage_ResolvesVersionFromPropsFileAtSameRef()
     {
-        var propsContent   = CsprojFixtures.DirectoryPackagesProps([("Newtonsoft.Json", "13.0.1")]);
-        var csprojContent  = CsprojFixtures.WithCentrallyManagedPackageReference("Newtonsoft.Json", "1.0.0");
+        var propsContent = CsprojFixtures.DirectoryPackagesProps([("Newtonsoft.Json", "13.0.1")]);
+        var csprojContent = CsprojFixtures.WithCentrallyManagedPackageReference("Newtonsoft.Json", "1.0.0");
 
         var repo = CreateInitializedRepo(
         [
@@ -313,7 +312,7 @@ public sealed class GitServiceTests
         var content = _svc.GetFileContentAtRef("main", path, repo);
 
         Assert.IsNotNull(content);
-        StringAssert.Contains(content, "hello world");
+        Assert.Contains("hello world", content);
     }
 
     [TestMethod]

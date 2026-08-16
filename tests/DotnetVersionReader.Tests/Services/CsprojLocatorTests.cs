@@ -1,9 +1,9 @@
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class CsprojLocatorTests
@@ -31,7 +31,7 @@ public sealed class CsprojLocatorTests
         var path   = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "ProjectA");
         var result = _locator.Locate(path);
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual(path, result[0]);
     }
 
@@ -49,7 +49,7 @@ public sealed class CsprojLocatorTests
 
         var result = _locator.Locate(dir);
 
-        Assert.AreEqual(2, result.Count);
+        Assert.HasCount(2, result);
         CollectionAssert.AreEquivalent(files.ToList(), result.ToList());
     }
 
@@ -68,7 +68,7 @@ public sealed class CsprojLocatorTests
 
         var result = _locator.Locate(dir);
 
-        Assert.AreEqual(2, result.Count);
+        Assert.HasCount(2, result);
     }
 
     // -------------------------------------------------------------------------
@@ -84,7 +84,7 @@ public sealed class CsprojLocatorTests
 
         var result = _locator.Locate(sln);
 
-        Assert.AreEqual(2, result.Count);
+        Assert.HasCount(2, result);
         CollectionAssert.AreEquivalent(new[] { p1, p2 }, result.ToList());
     }
 
@@ -96,7 +96,7 @@ public sealed class CsprojLocatorTests
 
         var result = _locator.Locate(sln);
 
-        Assert.AreEqual(1, result.Count);
+        Assert.HasCount(1, result);
         Assert.AreEqual(p1, result[0]);
     }
 
@@ -113,7 +113,7 @@ public sealed class CsprojLocatorTests
 
         var result = _locator.Locate(slnx);
 
-        Assert.AreEqual(2, result.Count);
+        Assert.HasCount(2, result);
         CollectionAssert.AreEquivalent(new[] { p1, p2 }, result.ToList());
     }
 

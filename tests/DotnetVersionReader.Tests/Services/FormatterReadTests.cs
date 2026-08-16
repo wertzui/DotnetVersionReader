@@ -3,7 +3,7 @@ using DotnetVersion.Models;
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class FormatterReadTests
@@ -23,7 +23,7 @@ public sealed class FormatterReadTests
         var output = _formatter.Format([], OutputFormat.Json, Formatter.ReadOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output);
         Assert.IsNotNull(array);
-        Assert.AreEqual(0, array.Length);
+        Assert.IsEmpty(array);
     }
 
     [TestMethod]
@@ -33,7 +33,7 @@ public sealed class FormatterReadTests
         var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
 
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output)!;
-        Assert.AreEqual(1, array.Length);
+        Assert.HasCount(1, array);
         Assert.AreEqual("Alpha", array[0].GetProperty("Name").GetString());
         Assert.AreEqual("1.0.0", array[0].GetProperty("Version").GetString());
     }
@@ -87,7 +87,7 @@ public sealed class FormatterReadTests
         var output = _formatter.Format(items, OutputFormat.Json, Formatter.ReadOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(output)!;
 
-        Assert.AreEqual(2, array.Length);
+        Assert.HasCount(2, array);
     }
 
     [TestMethod]
@@ -123,12 +123,12 @@ public sealed class FormatterReadTests
         var items  = new[] { MakeInfo("Alpha", "1.0.0") };
         var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
-        StringAssert.Contains(output, "Name");
-        StringAssert.Contains(output, "Version");
-        StringAssert.Contains(output, "Major");
-        StringAssert.Contains(output, "Minor");
-        StringAssert.Contains(output, "Patch");
-        StringAssert.Contains(output, "Suffix");
+        Assert.Contains("Name", output);
+        Assert.Contains("Version", output);
+        Assert.Contains("Major", output);
+        Assert.Contains("Minor", output);
+        Assert.Contains("Patch", output);
+        Assert.Contains("Suffix", output);
     }
 
     [TestMethod]
@@ -139,7 +139,7 @@ public sealed class FormatterReadTests
         var lines  = output.Split(Environment.NewLine);
 
         // ConsoleTables Markdown: second line is the separator, e.g. "| --- | --- |"
-        Assert.IsTrue(lines[1].Replace("-", "").Replace(" ", "").Replace("|", "").Length == 0,
+        Assert.AreEqual(0, lines[1].Replace("-", "").Replace(" ", "").Replace("|", "").Length,
             $"Expected separator line, got: {lines[1]}");
     }
 
@@ -149,8 +149,8 @@ public sealed class FormatterReadTests
         var items  = new[] { MakeInfo("MyProject", "2.3.4") };
         var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
-        StringAssert.Contains(output, "MyProject");
-        StringAssert.Contains(output, "2.3.4");
+        Assert.Contains("MyProject", output);
+        Assert.Contains("2.3.4", output);
     }
 
     [TestMethod]
@@ -163,8 +163,8 @@ public sealed class FormatterReadTests
         };
         var output = _formatter.Format(items, OutputFormat.Table, Formatter.ReadOptions);
 
-        StringAssert.Contains(output, "Alpha");
-        StringAssert.Contains(output, "Beta");
+        Assert.Contains("Alpha", output);
+        Assert.Contains("Beta", output);
     }
 
     [TestMethod]
@@ -179,7 +179,7 @@ public sealed class FormatterReadTests
         var lines      = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         var pipeCounts = lines.Select(l => l.Count(c => c == '|')).Distinct().ToArray();
 
-        Assert.AreEqual(1, pipeCounts.Length,
+        Assert.HasCount(1, pipeCounts,
             $"Expected identical pipe counts on every line, got: [{string.Join(", ", pipeCounts)}]");
     }
 
@@ -226,9 +226,9 @@ public sealed class FormatterReadTests
         var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
-        StringAssert.Contains(ex.Message, "Alpha");
-        StringAssert.Contains(ex.Message, "Beta");
-        StringAssert.Contains(ex.Message, "2");   // count
+        Assert.Contains("Alpha", ex.Message);
+        Assert.Contains("Beta", ex.Message);
+        Assert.Contains("2", ex.Message);   // count
     }
 
     [TestMethod]
@@ -243,7 +243,7 @@ public sealed class FormatterReadTests
         var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(items, OutputFormat.Version, Formatter.ReadOptions));
 
-        StringAssert.Contains(ex.Message, "3");
+        Assert.Contains("3", ex.Message);
     }
 
     // -------------------------------------------------------------------------
@@ -275,7 +275,7 @@ public sealed class FormatterReadTests
         var output = _formatter.Format(items, OutputFormat.List, Formatter.ReadOptions);
         var lines  = output.Split(Environment.NewLine);
 
-        Assert.AreEqual(2, lines.Length);
+        Assert.HasCount(2, lines);
         Assert.AreEqual("Alpha 1.0.0",     lines[0]);
         Assert.AreEqual("Beta 2.0.0-rc.1", lines[1]);
     }
@@ -286,9 +286,9 @@ public sealed class FormatterReadTests
         var items  = new[] { MakeInfo("MyLib", "1.0.0") };
         var output = _formatter.Format(items, OutputFormat.List, Formatter.ReadOptions);
 
-        Assert.IsFalse(output.Contains("|"),  "List output must not contain table pipes");
-        Assert.IsFalse(output.Contains("-"),  "List output must not contain bullets or separators");
-        Assert.IsFalse(output.Contains("#"),  "List output must not contain headers");
+        Assert.DoesNotContain("|", output,  "List output must not contain table pipes");
+        Assert.DoesNotContain("-", output,  "List output must not contain bullets or separators");
+        Assert.DoesNotContain("#", output,  "List output must not contain headers");
     }
 
     // -------------------------------------------------------------------------

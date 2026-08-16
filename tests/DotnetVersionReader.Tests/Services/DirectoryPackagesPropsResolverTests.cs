@@ -1,9 +1,9 @@
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class DirectoryPackagesPropsResolverTests
@@ -33,7 +33,7 @@ public sealed class DirectoryPackagesPropsResolverTests
 
         var map = _resolver.ParseContent(content);
 
-        Assert.AreEqual(2, map.Count);
+        Assert.HasCount(2, map);
         Assert.AreEqual("13.0.1", map["Newtonsoft.Json"]);
         Assert.AreEqual("3.0.0",  map["Serilog"]);
     }
@@ -51,14 +51,14 @@ public sealed class DirectoryPackagesPropsResolverTests
     public void ParseContent_InvalidXml_ReturnsEmptyMap()
     {
         var map = _resolver.ParseContent("NOT XML");
-        Assert.AreEqual(0, map.Count);
+        Assert.IsEmpty(map);
     }
 
     [TestMethod]
     public void ParseContent_NoPackageVersionElements_ReturnsEmptyMap()
     {
         var map = _resolver.ParseContent("<Project><PropertyGroup></PropertyGroup></Project>");
-        Assert.AreEqual(0, map.Count);
+        Assert.IsEmpty(map);
     }
 
     // -------------------------------------------------------------------------
@@ -97,7 +97,7 @@ public sealed class DirectoryPackagesPropsResolverTests
     {
         var (dir, _) = _tmp.CreateDirectory([]);
         var map = _resolver.Resolve(dir);
-        Assert.AreEqual(0, map.Count);
+        Assert.IsEmpty(map);
     }
 
     [TestMethod]

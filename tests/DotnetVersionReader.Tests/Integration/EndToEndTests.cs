@@ -1,12 +1,11 @@
-using System.Text.Json;
-using System.Text.RegularExpressions;
 using DotnetVersion.Models;
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
-using Microsoft.VisualStudio.TestTools.UnitTesting;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
+using System.Text.Json;
+using System.Text.RegularExpressions;
 
-namespace DotnetVersion.Tests.Integration;
+namespace DotnetVersionReader.Tests.Integration;
 
 /// <summary>
 /// End-to-end tests that wire together all services the same way Program.cs does.
@@ -27,23 +26,23 @@ public sealed class EndToEndTests
     [TestMethod]
     public void FullPipeline_SingleCsproj_NoFilters_JsonOutput()
     {
-        var path   = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "MyApp");
+        var path = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "MyApp");
         var result = RunPipeline(path, [], OutputFormat.Json);
 
         var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
-        Assert.AreEqual(1, array.Length);
-        Assert.AreEqual("MyApp",  array[0].GetProperty("Name").GetString());
-        Assert.AreEqual("3.2.1",  array[0].GetProperty("Version").GetString());
+        Assert.HasCount(1, array);
+        Assert.AreEqual("MyApp", array[0].GetProperty("Name").GetString());
+        Assert.AreEqual("3.2.1", array[0].GetProperty("Version").GetString());
     }
 
     [TestMethod]
     public void FullPipeline_SingleCsproj_NoFilters_TableOutput()
     {
-        var path   = _tmp.CreateCsproj(CsprojFixtures.WithVersionPrefixAndSuffix, "Core");
+        var path = _tmp.CreateCsproj(CsprojFixtures.WithVersionPrefixAndSuffix, "Core");
         var result = RunPipeline(path, [], OutputFormat.Table);
 
-        StringAssert.Contains(result, "Core");
-        StringAssert.Contains(result, "1.2.3-rc.2");
+        Assert.Contains("Core", result);
+        Assert.Contains("1.2.3-rc.2", result);
     }
 
     [TestMethod]
@@ -55,44 +54,44 @@ public sealed class EndToEndTests
         ]);
 
         var result = RunPipeline(dir, [], OutputFormat.Json);
-        var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
+        var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
 
-        Assert.AreEqual(2, array.Length);
+        Assert.HasCount(2, array);
     }
 
     [TestMethod]
     public void FullPipeline_SlnFile_FiltersProjects()
     {
-        var p1  = _tmp.CreateCsproj(CsprojFixtures.WithGeneratePackageOnBuildTrue,  "Packable");
-        var p2  = _tmp.CreateCsproj(CsprojFixtures.WithGeneratePackageOnBuildFalse, "NotPackable");
+        var p1 = _tmp.CreateCsproj(CsprojFixtures.WithGeneratePackageOnBuildTrue, "Packable");
+        var p2 = _tmp.CreateCsproj(CsprojFixtures.WithGeneratePackageOnBuildFalse, "NotPackable");
         var sln = _tmp.CreateSln([p1, p2]);
 
         var filters = new FilterParser().Parse(["GeneratePackageOnBuild=^true$"]);
-        var result  = RunPipeline(sln, filters, OutputFormat.Json);
-        var array   = JsonSerializer.Deserialize<JsonElement[]>(result)!;
+        var result = RunPipeline(sln, filters, OutputFormat.Json);
+        var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
 
-        Assert.AreEqual(1, array.Length);
+        Assert.HasCount(1, array);
         Assert.AreEqual("Packable", array[0].GetProperty("Name").GetString());
     }
 
     [TestMethod]
     public void FullPipeline_SlnxFile_ReturnsAllProjects()
     {
-        var p1   = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly,       "X1");
-        var p2   = _tmp.CreateCsproj(CsprojFixtures.WithVersionPrefixOnly, "X2");
+        var p1 = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "X1");
+        var p2 = _tmp.CreateCsproj(CsprojFixtures.WithVersionPrefixOnly, "X2");
         var slnx = _tmp.CreateSlnx([p1, p2]);
 
         var result = RunPipeline(slnx, [], OutputFormat.Json);
-        var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
+        var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
 
-        Assert.AreEqual(2, array.Length);
+        Assert.HasCount(2, array);
     }
 
     [TestMethod]
     public void FullPipeline_WithMultipleFilters_AllMustMatch()
     {
         var p1 = _tmp.CreateCsproj(CsprojFixtures.WithTargetFrameworkNet9, "Net9App");
-        var p2 = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly,         "OtherApp");
+        var p2 = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "OtherApp");
 
         var (dir, _) = _tmp.CreateDirectory([]);
         // Write both into the same dir by using the temp directory itself
@@ -102,22 +101,22 @@ public sealed class EndToEndTests
 
         // Run over individual file
         var result = RunPipeline(p1, filters, OutputFormat.Json);
-        var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
+        var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
 
-        Assert.AreEqual(1, array.Length);
+        Assert.HasCount(1, array);
         Assert.AreEqual("Net9App", array[0].GetProperty("Name").GetString());
     }
 
     [TestMethod]
     public void FullPipeline_NoMatchingFilter_ReturnsEmptyArray()
     {
-        var path    = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "NoMatch");
+        var path = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "NoMatch");
         var filters = new FilterParser().Parse(["GeneratePackageOnBuild=true"]);
 
         var result = RunPipeline(path, filters, OutputFormat.Json);
-        var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
+        var array = JsonSerializer.Deserialize<JsonElement[]>(result)!;
 
-        Assert.AreEqual(0, array.Length);
+        Assert.IsEmpty(array);
     }
 
     // -------------------------------------------------------------------------
@@ -129,12 +128,12 @@ public sealed class EndToEndTests
         IReadOnlyList<(string Element, Regex Pattern)> filters,
         OutputFormat format)
     {
-        var locator   = new CsprojLocator();
-        var parser    = new CsprojParser();
+        var locator = new CsprojLocator();
+        var parser = new CsprojParser();
         var formatter = new Formatter();
 
         var csprojFiles = locator.Locate(input);
-        var results     = new List<ProjectVersionInfo>();
+        var results = new List<ProjectVersionInfo>();
 
         foreach (var file in csprojFiles)
         {

@@ -2,7 +2,7 @@ using DotnetVersion.Models;
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 /// <summary>
 /// Unit tests for <see cref="DiffService"/>.
@@ -47,7 +47,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => MakeInfo("MyLib", "1.0.0"),
             getBaseInfo:      _ => MakeInfo("MyLib", "1.0.0"));
 
-        Assert.AreEqual(0, results.Count,
+        Assert.IsEmpty(results,
             "A project whose version and dependencies have not changed must be excluded from the diff.");
     }
 
@@ -59,7 +59,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => MakeInfo("MyLib", "2.0.0"),
             getBaseInfo:      _ => MakeInfo("MyLib", "1.0.0"));
 
-        Assert.AreEqual(1, results.Count);
+        Assert.HasCount(1, results);
         Assert.AreEqual(DiffResultStatus.Bumped, results[0].Status);
     }
 
@@ -71,7 +71,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => MakeInfo("BrandNew", "1.0.0"),
             getBaseInfo:      _ => null);
 
-        Assert.AreEqual(1, results.Count);
+        Assert.HasCount(1, results);
         Assert.AreEqual(DiffResultStatus.NewProject, results[0].Status);
         Assert.IsNull(results[0].BaseVersion);
     }
@@ -103,13 +103,13 @@ public sealed class DiffServiceTests
             getHeadInfo: name => headInfos[name],
             getBaseInfo: name => baseInfos[name]);
 
-        Assert.AreEqual(2, results.Count,
+        Assert.HasCount(2, results,
             "Only 'Changed' and 'BrandNew' should appear; 'Unchanged' must be excluded.");
 
         var names = results.Select(r => r.Name).ToHashSet(StringComparer.OrdinalIgnoreCase);
-        Assert.IsTrue(names.Contains("Changed"),  "Changed must be in results");
-        Assert.IsTrue(names.Contains("BrandNew"), "BrandNew must be in results");
-        Assert.IsFalse(names.Contains("Unchanged"), "Unchanged must NOT be in results");
+        Assert.Contains("Changed", names,  "Changed must be in results");
+        Assert.Contains("BrandNew", names, "BrandNew must be in results");
+        Assert.DoesNotContain("Unchanged", names, "Unchanged must NOT be in results");
     }
 
     [TestMethod]
@@ -120,7 +120,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => MakeInfo("X", "1.0.0"),
             getBaseInfo:      _ => MakeInfo("X", "1.0.0"));
 
-        Assert.AreEqual(0, results.Count);
+        Assert.IsEmpty(results);
     }
 
     [TestMethod]
@@ -131,7 +131,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => MakeInfo("MyLib", "1.0.0-RC.1"),
             getBaseInfo:      _ => MakeInfo("MyLib", "1.0.0-rc.1"));
 
-        Assert.AreEqual(0, results.Count,
+        Assert.IsEmpty(results,
             "Version comparison must be case-insensitive; 'RC.1' and 'rc.1' are the same.");
     }
 
@@ -184,7 +184,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => null,
             getBaseInfo:      _ => MakeInfo("Ghost", "1.0.0"));
 
-        Assert.AreEqual(0, results.Count,
+        Assert.IsEmpty(results,
             "A project that cannot be parsed at HEAD should be skipped entirely.");
     }
 
@@ -203,10 +203,10 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => head,
             getBaseInfo:      _ => @base);
 
-        Assert.AreEqual(1, results.Count);
+        Assert.HasCount(1, results);
         var r = results[0];
         Assert.AreEqual(DiffResultStatus.DependenciesChanged, r.Status);
-        Assert.AreEqual(1, r.DependencyChanges.Count);
+        Assert.HasCount(1, r.DependencyChanges);
         Assert.AreEqual(DependencyKind.Package, r.DependencyChanges[0].Kind);
         Assert.AreEqual("Newtonsoft.Json", r.DependencyChanges[0].Name);
         Assert.AreEqual(SemVerBumpType.Patch, r.DependencyChanges[0].BumpType);
@@ -294,7 +294,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => head,
             getBaseInfo:      _ => @base);
 
-        Assert.AreEqual(0, results.Count);
+        Assert.IsEmpty(results);
     }
 
     // -------------------------------------------------------------------------
@@ -362,7 +362,7 @@ public sealed class DiffServiceTests
             getBaseInfo:      _ => @base);
 
         var r = results[0];
-        Assert.AreEqual(2, r.DependencyChanges.Count);
+        Assert.HasCount(2, r.DependencyChanges);
         Assert.AreEqual("2.0.0", r.SuggestedVersionPrefix,
             "The most severe change (major) must determine the suggested bump.");
     }
@@ -382,7 +382,7 @@ public sealed class DiffServiceTests
 
         var r = results[0];
         Assert.AreEqual(DiffResultStatus.Bumped, r.Status);
-        Assert.AreEqual(1, r.DependencyChanges.Count);
+        Assert.HasCount(1, r.DependencyChanges);
         Assert.IsNull(r.SuggestedVersionPrefix);
         Assert.IsNull(r.SuggestedVersionSuffix);
         Assert.IsNull(r.SuggestedVersion);
@@ -398,7 +398,7 @@ public sealed class DiffServiceTests
             getHeadInfo:      _ => head,
             getBaseInfo:      _ => null);
 
-        Assert.AreEqual(0, results[0].DependencyChanges.Count);
+        Assert.IsEmpty(results[0].DependencyChanges);
         Assert.IsNull(results[0].SuggestedVersionPrefix);
     }
 }

@@ -1,4 +1,4 @@
-﻿<Project Sdk="Microsoft.NET.Sdk">
+<Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
     <OutputType>Exe</OutputType>
@@ -12,7 +12,7 @@
     <PackAsTool>true</PackAsTool>
     <ToolCommandName>dotnet-version</ToolCommandName>
     <PackageId>DotnetVersionReader</PackageId>
-    <Version>1.4.1</Version>
+    <Version>1.4.2</Version>
     <InformationalVersion>$(Version)</InformationalVersion>
     <Authors>wertzui</Authors>
     <Description>A .NET global tool that reads and displays version information from .csproj files.</Description>
@@ -37,8 +37,8 @@
 
   <ItemGroup>
     <PackageReference Include="ConsoleTables" Version="2.7.0" />
-    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.301" PrivateAssets="All" />
-    <PackageReference Include="System.CommandLine" Version="2.0.10" />
+    <PackageReference Include="Microsoft.SourceLink.GitHub" Version="10.0.400" PrivateAssets="all" />
+    <PackageReference Include="System.CommandLine" Version="2.0.11" />
   </ItemGroup>
 
 </Project>

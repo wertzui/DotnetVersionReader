@@ -3,7 +3,7 @@ using DotnetVersion.Models;
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class FormatterDiffTests
@@ -22,7 +22,7 @@ public sealed class FormatterDiffTests
     {
         var result = _formatter.Format([], OutputFormat.Json, Formatter.DiffOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
-        Assert.AreEqual(0, array.Length);
+        Assert.IsEmpty(array);
     }
 
     [TestMethod]
@@ -43,7 +43,7 @@ public sealed class FormatterDiffTests
         var json  = _formatter.Format(results, OutputFormat.Json, Formatter.DiffOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
-        Assert.AreEqual(1, array.Length);
+        Assert.HasCount(1, array);
         Assert.AreEqual("MyLib",   array[0].GetProperty("Name").GetString());
         Assert.AreEqual("2.0.0",   array[0].GetProperty("HeadVersion").GetString());
         Assert.AreEqual("1.0.0",   array[0].GetProperty("BaseVersion").GetString());
@@ -84,7 +84,7 @@ public sealed class FormatterDiffTests
         var json  = _formatter.Format(results, OutputFormat.Json, Formatter.DiffOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
-        Assert.AreEqual(2, array.Length);
+        Assert.HasCount(2, array);
     }
 
     [TestMethod]
@@ -174,11 +174,11 @@ public sealed class FormatterDiffTests
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.DiffOptions);
 
-        StringAssert.Contains(table, "Name");
-        StringAssert.Contains(table, "HeadVersion");
-        StringAssert.Contains(table, "BaseVersion");
-        StringAssert.Contains(table, "Status");
-        StringAssert.Contains(table, "SuggestedVersion");
+        Assert.Contains("Name", table);
+        Assert.Contains("HeadVersion", table);
+        Assert.Contains("BaseVersion", table);
+        Assert.Contains("Status", table);
+        Assert.Contains("SuggestedVersion", table);
     }
 
     [TestMethod]
@@ -200,8 +200,8 @@ public sealed class FormatterDiffTests
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.DiffOptions);
 
-        StringAssert.Contains(table, "DependenciesChanged");
-        StringAssert.Contains(table, "1.3.0");
+        Assert.Contains("DependenciesChanged", table);
+        Assert.Contains("1.3.0", table);
     }
 
     [TestMethod]
@@ -221,10 +221,10 @@ public sealed class FormatterDiffTests
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.DiffOptions);
 
-        StringAssert.Contains(table, "MyLib");
-        StringAssert.Contains(table, "2.0.0");
-        StringAssert.Contains(table, "1.0.0");
-        StringAssert.Contains(table, "Bumped");
+        Assert.Contains("MyLib", table);
+        Assert.Contains("2.0.0", table);
+        Assert.Contains("1.0.0", table);
+        Assert.Contains("Bumped", table);
     }
 
     [TestMethod]
@@ -243,7 +243,7 @@ public sealed class FormatterDiffTests
         };
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.DiffOptions);
-        StringAssert.Contains(table, "(new)");
+        Assert.Contains("(new)", table);
     }
 
     [TestMethod]
@@ -259,7 +259,7 @@ public sealed class FormatterDiffTests
         var lines      = output.Split(Environment.NewLine, StringSplitOptions.RemoveEmptyEntries);
         var pipeCounts = lines.Select(l => l.Count(c => c == '|')).Distinct().ToArray();
 
-        Assert.AreEqual(1, pipeCounts.Length,
+        Assert.HasCount(1, pipeCounts,
             $"Expected identical pipe counts on every line, got: [{string.Join(", ", pipeCounts)}]");
     }
 
@@ -305,8 +305,8 @@ public sealed class FormatterDiffTests
         var ex = Assert.ThrowsExactly<InvalidOperationException>(
             () => _formatter.Format(results, OutputFormat.Version, Formatter.DiffOptions));
 
-        StringAssert.Contains(ex.Message, "A");
-        StringAssert.Contains(ex.Message, "B");
+        Assert.Contains("A", ex.Message);
+        Assert.Contains("B", ex.Message);
     }
 
     // -------------------------------------------------------------------------
@@ -351,7 +351,7 @@ public sealed class FormatterDiffTests
         var output = _formatter.Format(results, OutputFormat.List, Formatter.DiffOptions);
         var lines  = output.Split(Environment.NewLine);
 
-        Assert.AreEqual(2, lines.Length);
+        Assert.HasCount(2, lines);
         Assert.AreEqual("Alpha 2.0.0", lines[0]);
         Assert.AreEqual("Beta 1.0.0",  lines[1]);
     }
@@ -373,7 +373,7 @@ public sealed class FormatterDiffTests
 
         var output = _formatter.Format(results, OutputFormat.List, Formatter.DiffOptions);
 
-        Assert.IsFalse(output.Contains("|"), "List output must not contain table pipes");
-        Assert.IsFalse(output.Contains("#"), "List output must not contain headers");
+        Assert.DoesNotContain("|", output, "List output must not contain table pipes");
+        Assert.DoesNotContain("#", output, "List output must not contain headers");
     }
 }

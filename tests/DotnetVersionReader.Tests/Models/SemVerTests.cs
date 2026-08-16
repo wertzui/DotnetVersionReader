@@ -1,7 +1,7 @@
 using DotnetVersion.Models;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Models;
+namespace DotnetVersionReader.Tests.Models;
 
 [TestClass]
 public sealed class SemVerTests

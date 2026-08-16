@@ -1,4 +1,4 @@
-namespace DotnetVersion.Tests.Fixtures;
+namespace DotnetVersionReader.Tests.Fixtures;
 
 /// <summary>
 /// In-memory .csproj XML strings used by the unit tests.

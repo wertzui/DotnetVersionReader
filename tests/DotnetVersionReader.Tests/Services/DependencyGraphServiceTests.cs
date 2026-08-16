@@ -1,9 +1,9 @@
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class DependencyGraphServiceTests
@@ -31,7 +31,7 @@ public sealed class DependencyGraphServiceTests
         var (_, projects) = _tmp.CreateProjectTree([("Lib", CsprojFixtures.Library())]);
         var graph = _svc.Build([projects["Lib"].CsprojPath]);
 
-        Assert.AreEqual(1, graph.Nodes.Count);
+        Assert.HasCount(1, graph.Nodes);
     }
 
     [TestMethod]
@@ -50,7 +50,7 @@ public sealed class DependencyGraphServiceTests
         var graph = _svc.Build([appCsproj]);
 
         // Graph should have discovered Core transitively
-        Assert.AreEqual(2, graph.Nodes.Count);
+        Assert.HasCount(2, graph.Nodes);
     }
 
     [TestMethod]
@@ -71,9 +71,9 @@ public sealed class DependencyGraphServiceTests
             DependencyGraphService.NormalizePath(coreCsproj)));
 
         var dependents = graph.ReverseDependencies[DependencyGraphService.NormalizePath(coreCsproj)];
-        Assert.AreEqual(1, dependents.Count);
-        Assert.IsTrue(dependents.Any(d =>
-            string.Equals(d, DependencyGraphService.NormalizePath(appCsproj), StringComparison.OrdinalIgnoreCase)));
+        Assert.HasCount(1, dependents);
+        Assert.Contains(d =>
+            string.Equals(d, DependencyGraphService.NormalizePath(appCsproj), StringComparison.OrdinalIgnoreCase), dependents);
     }
 
     [TestMethod]
@@ -88,8 +88,8 @@ public sealed class DependencyGraphServiceTests
         var graph = _svc.Build([projects["Lib"].CsprojPath]);
         var node  = graph.Nodes.Values.Single();
 
-        Assert.IsTrue(node.OwnedFiles.Any(f =>
-            string.Equals(f, DependencyGraphService.NormalizePath(srcFile), StringComparison.OrdinalIgnoreCase)),
+        Assert.Contains(f =>
+            string.Equals(f, DependencyGraphService.NormalizePath(srcFile), StringComparison.OrdinalIgnoreCase), node.OwnedFiles,
             "OwnedFiles should include Class1.cs");
     }
 
@@ -106,7 +106,7 @@ public sealed class DependencyGraphServiceTests
         var graph = _svc.Build([projects["Lib"].CsprojPath]);
         var node  = graph.Nodes.Values.Single();
 
-        Assert.IsFalse(node.OwnedFiles.Any(f => f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") || f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}")),
+        Assert.DoesNotContain(f => f.Contains($"{Path.DirectorySeparatorChar}bin{Path.DirectorySeparatorChar}") || f.Contains($"{Path.DirectorySeparatorChar}obj{Path.DirectorySeparatorChar}"), node.OwnedFiles,
             "OwnedFiles must not include bin/ or obj/ artifacts");
     }
 
@@ -122,7 +122,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([], graph);
 
-        Assert.AreEqual(0, affected.Count);
+        Assert.IsEmpty(affected);
     }
 
     [TestMethod]
@@ -134,7 +134,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([csprojPath], graph);
 
-        Assert.AreEqual(1, affected.Count);
+        Assert.HasCount(1, affected);
         Assert.AreEqual(DependencyGraphService.NormalizePath(csprojPath), affected[0].CsprojPath);
     }
 
@@ -148,7 +148,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([srcFile], graph);
 
-        Assert.AreEqual(1, affected.Count);
+        Assert.HasCount(1, affected);
     }
 
     [TestMethod]
@@ -172,9 +172,9 @@ public sealed class DependencyGraphServiceTests
         var affected = _svc.GetAffectedProjects([coreFile], graph);
 
         // Both Core and App should be affected
-        Assert.AreEqual(2, affected.Count);
-        Assert.IsTrue(affected.Any(n => string.Equals(n.CsprojPath, DependencyGraphService.NormalizePath(coreCsproj), StringComparison.OrdinalIgnoreCase)));
-        Assert.IsTrue(affected.Any(n => string.Equals(n.CsprojPath, DependencyGraphService.NormalizePath(appCsproj), StringComparison.OrdinalIgnoreCase)));
+        Assert.HasCount(2, affected);
+        Assert.Contains(n => string.Equals(n.CsprojPath, DependencyGraphService.NormalizePath(coreCsproj), StringComparison.OrdinalIgnoreCase), affected);
+        Assert.Contains(n => string.Equals(n.CsprojPath, DependencyGraphService.NormalizePath(appCsproj), StringComparison.OrdinalIgnoreCase), affected);
     }
 
     [TestMethod]
@@ -188,7 +188,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([unrelated], graph);
 
-        Assert.AreEqual(0, affected.Count);
+        Assert.IsEmpty(affected);
     }
 
     [TestMethod]
@@ -215,7 +215,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([changedFile], graph);
 
-        Assert.AreEqual(3, affected.Count, "All three projects should be affected");
+        Assert.HasCount(3, affected, "All three projects should be affected");
     }
 
     // -------------------------------------------------------------------------
@@ -267,7 +267,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([propsPath], graph);
 
-        Assert.AreEqual(2, affected.Count,
+        Assert.HasCount(2, affected,
             "Both projects sharing the Directory.Packages.props file must be reported as affected.");
     }
 
@@ -289,7 +289,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([propsPath], graph);
 
-        Assert.AreEqual(2, affected.Count,
+        Assert.HasCount(2, affected,
             "The props change should bubble up from Core to its consumer App as well.");
     }
 
@@ -308,7 +308,7 @@ public sealed class DependencyGraphServiceTests
 
         var affected = _svc.GetAffectedProjects([props2Path], graph);
 
-        Assert.AreEqual(1, affected.Count);
+        Assert.HasCount(1, affected);
         Assert.AreEqual(
             DependencyGraphService.NormalizePath(projects2["Lib2"].CsprojPath),
             affected[0].CsprojPath);

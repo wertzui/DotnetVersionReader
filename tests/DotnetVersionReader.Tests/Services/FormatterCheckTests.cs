@@ -3,7 +3,7 @@ using DotnetVersion.Models;
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class FormatterCheckTests
@@ -22,7 +22,7 @@ public sealed class FormatterCheckTests
     {
         var result = _formatter.Format([], OutputFormat.Json, Formatter.CheckOptions);
         var array  = JsonSerializer.Deserialize<JsonElement[]>(result)!;
-        Assert.AreEqual(0, array.Length);
+        Assert.IsEmpty(array);
     }
 
     [TestMethod]
@@ -43,7 +43,7 @@ public sealed class FormatterCheckTests
         var json  = _formatter.Format(results, OutputFormat.Json, Formatter.CheckOptions);
         var array = JsonSerializer.Deserialize<JsonElement[]>(json)!;
 
-        Assert.AreEqual(1, array.Length);
+        Assert.HasCount(1, array);
         Assert.AreEqual("MyLib", array[0].GetProperty("Name").GetString());
         Assert.AreEqual("2.0.0", array[0].GetProperty("HeadVersion").GetString());
         Assert.AreEqual("1.0.0", array[0].GetProperty("BaseVersion").GetString());
@@ -121,10 +121,10 @@ public sealed class FormatterCheckTests
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.CheckOptions);
 
-        StringAssert.Contains(table, "MyLib");
-        StringAssert.Contains(table, "2.0.0");
-        StringAssert.Contains(table, "1.0.0");
-        StringAssert.Contains(table, "Ok");
+        Assert.Contains("MyLib", table);
+        Assert.Contains("2.0.0", table);
+        Assert.Contains("1.0.0", table);
+        Assert.Contains("Ok", table);
     }
 
     [TestMethod]
@@ -143,7 +143,7 @@ public sealed class FormatterCheckTests
         };
 
         var table = _formatter.Format(results, OutputFormat.Table, Formatter.CheckOptions);
-        StringAssert.Contains(table, "(new)");
+        Assert.Contains("(new)", table);
     }
 
     // -------------------------------------------------------------------------
@@ -250,7 +250,7 @@ public sealed class FormatterCheckTests
         var output = _formatter.Format(results, OutputFormat.List, Formatter.CheckOptions);
         var lines  = output.Split(Environment.NewLine);
 
-        Assert.AreEqual(2, lines.Length);
+        Assert.HasCount(2, lines);
         Assert.AreEqual("Alpha 1.0.0", lines[0]);
         Assert.AreEqual("Beta 2.0.0",  lines[1]);
     }

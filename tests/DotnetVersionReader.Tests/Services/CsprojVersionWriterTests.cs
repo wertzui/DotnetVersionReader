@@ -1,9 +1,9 @@
 using DotnetVersion.Services;
-using DotnetVersion.Tests.Fixtures;
-using DotnetVersion.Tests.Helpers;
+using DotnetVersionReader.Tests.Fixtures;
+using DotnetVersionReader.Tests.Helpers;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class CsprojVersionWriterTests
@@ -140,7 +140,7 @@ public sealed class CsprojVersionWriterTests
         _writer.ApplyVersion(path, "9.0.0", "");
 
         var content = File.ReadAllText(path);
-        StringAssert.Contains(content, "net9.0");
+        Assert.Contains("net9.0", content);
 
         var result = _parser.Parse(path);
         Assert.AreEqual("9.0.0", result!.ResolvedVersion);
@@ -157,8 +157,8 @@ public sealed class CsprojVersionWriterTests
 
         var result = _parser.Parse(path);
         Assert.AreEqual("1.1.0", result!.ResolvedVersion);
-        Assert.AreEqual(1, result.PackageReferences.Count);
-        Assert.AreEqual(1, result.ProjectReferences.Count);
+        Assert.HasCount(1, result.PackageReferences);
+        Assert.HasCount(1, result.ProjectReferences);
     }
 
     // -------------------------------------------------------------------------
@@ -171,12 +171,12 @@ public sealed class CsprojVersionWriterTests
     {
         var path = _tmp.CreateCsproj(CsprojFixtures.WithVersionOnly, "MyLib");
         var before = File.ReadAllText(path);
-        Assert.IsFalse(before.TrimStart().StartsWith("<?xml"), "Fixture must not start with an XML declaration.");
+        Assert.DoesNotStartWith("<?xml", before.TrimStart(), "Fixture must not start with an XML declaration.");
 
         _writer.ApplyVersion(path, "4.0.0", "");
 
         var after = File.ReadAllText(path);
-        Assert.IsFalse(after.TrimStart().StartsWith("<?xml"),
+        Assert.DoesNotStartWith("<?xml", after.TrimStart(),
             "ApplyVersion must not insert an XML declaration that was not present in the original file.");
     }
 
@@ -190,7 +190,7 @@ public sealed class CsprojVersionWriterTests
         _writer.ApplyVersion(path, "4.0.0", "");
 
         var after = File.ReadAllText(path);
-        Assert.IsTrue(after.TrimStart().StartsWith("<?xml"),
+        Assert.StartsWith("<?xml", after.TrimStart(),
             "ApplyVersion must preserve an XML declaration that was present in the original file.");
     }
 

@@ -2,7 +2,7 @@ using System.Text.Json;
 using DotnetVersion.Services;
 using Microsoft.VisualStudio.TestTools.UnitTesting;
 
-namespace DotnetVersion.Tests.Services;
+namespace DotnetVersionReader.Tests.Services;
 
 [TestClass]
 public sealed class JsonSchemaProviderTests
@@ -58,7 +58,7 @@ public sealed class JsonSchemaProviderTests
         Assert.IsTrue(root.TryGetProperty("$schema", out var schemaProp) ||
                       root.TryGetProperty("schema",  out schemaProp),
             "Expected a schema keyword");
-        StringAssert.Contains(schemaProp.GetString(), "json-schema.org");
+        Assert.Contains("json-schema.org", schemaProp.GetString());
     }
 
     [TestMethod]
